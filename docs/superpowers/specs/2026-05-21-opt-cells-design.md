@@ -292,7 +292,9 @@ Strict optimum (min cell count with DAG sharing) is NP-hard. Use the standard tw
 
 **Input pin inversion is free.** When NPN matching says a cell can implement a cut with one or more of its cut-leaves arriving inverted, we treat that as a single-cell mapping — the report shows the inversion as `pin=!signal` annotation, and no separate INV cell is counted.
 
-Rationale: real standard-cell libraries typically supply pin-inverted variants of common cells, or equivalently, the synthesis flow merges INVs into preceding gates. For a tool whose purpose is "what is the minimum logical complexity my library needs to support", this is the right abstraction. INV cells are counted only when an explicit polarity reconciliation is needed at a primary output or at a fanout point (see formula below).
+Rationale: real standard-cell libraries typically supply cells with built-in inverted input pins. Concrete example — TSMC's `INR4D0BWP7T40P140` has native function `out = !(!A1 | B1 | B2 | B3)`, where the inversion on pin `A1` is part of the cell's physical definition. So a logic like `!s3 & s2 & s1 & s0` maps to exactly one such cell, without any external inverter. The user is responsible for populating their library with the variants they want available (the tool does not invent cells); NPN matching only finds equivalence between user-provided cells and the target cut.
+
+INV cells are counted only when explicit polarity reconciliation is needed at a primary output (or at a fanout point where two parent cuts need opposite polarities and no cheaper option exists).
 
 #### Phase 1 — bottom-up estimation
 
