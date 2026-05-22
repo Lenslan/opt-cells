@@ -60,7 +60,8 @@ pub fn simulate_netlist(
             let v = value[pi.leaf.0 as usize] ^ pi.invert;
             if v { pattern |= 1u32 << pin_idx; }
         }
-        let out = (cell_decl.tt.0 >> pattern) & 1 == 1;
+        let out_raw = (cell_decl.tt.0 >> pattern) & 1 == 1;
+        let out = out_raw ^ c.produces_negation;
         value[c.aig_node.0 as usize] = out;
     }
 

@@ -8,6 +8,8 @@ pub struct CellInstance {
     pub aig_node: NodeId,
     /// One entry per cell PIN, indexed by pin position in the library declaration.
     pub pin_inputs: Vec<PinInput>,
+    /// True if this cell's natural output is the inverse of `aig_node`'s natural function.
+    pub produces_negation: bool,
 }
 
 #[derive(Debug, Clone)]

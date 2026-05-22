@@ -13,7 +13,6 @@ proptest! {
         prop_assert_eq!(info1.canonical_tt, info2.canonical_tt);
     }
 
-    #[ignore]
     #[test]
     fn random_aig_maps_to_functionally_equivalent_netlist(
         seed in any::<u64>(),

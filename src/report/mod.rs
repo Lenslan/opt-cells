@@ -136,6 +136,7 @@ mod tests {
                     PinInput { leaf: a.node, invert: false },
                     PinInput { leaf: b.node, invert: false },
                 ],
+                produces_negation: true,
             }],
             outputs: vec![("y".into(), ab.node, true)],
             total_cells: 1,

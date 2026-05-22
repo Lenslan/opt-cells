@@ -52,6 +52,7 @@ pub fn run(
                 cell_id: CellId(inv_id),
                 aig_node: node,
                 pin_inputs: vec![PinInput { leaf: node, invert: false }],
+                produces_negation: true,
             });
             required.insert((node, neg_polarity), Some(uid));
             queue.push_back((node, false));
@@ -70,6 +71,7 @@ pub fn run(
                 cell_id: choice.mapping.cell_id,
                 aig_node: node,
                 pin_inputs,
+                produces_negation: choice.mapping.output_negation,
             });
             required.insert((node, neg_polarity), Some(uid));
             for (leaf_pos, &leaf) in cut.leaves.iter().enumerate() {
