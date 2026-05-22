@@ -1,0 +1,27 @@
+[package]
+name = "opt-cells"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Map combinational logic to minimum-cell-count cell library implementation"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+chumsky = "0.10"
+ariadne = "0.4"
+thiserror = "1"
+anyhow = "1"
+
+[dev-dependencies]
+proptest = "1"
+
+[[bin]]
+name = "opt-cells"
+path = "src/main.rs"
+
+[lib]
+name = "opt_cells"
+path = "src/lib.rs"
