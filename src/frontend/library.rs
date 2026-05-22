@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 use crate::aig::{Aig, Tt64};
 use crate::error::OptCellsError;
+use crate::frontend::ast::{BitLiteral, Expr};
 use crate::frontend::parser::expr_parser;
-use crate::frontend::ast::{Expr, BitLiteral};
 use chumsky::Parser;
 
 #[derive(Debug, Deserialize)]
@@ -63,7 +63,10 @@ pub fn load_library(path: &str) -> Result<CellLib, OptCellsError> {
         }
         let n_inputs = raw.inputs.len() as u32;
         if n_inputs == 0 || n_inputs > 6 {
-            notes.push(format!("cell '{}' has {} inputs (outside [1,6]); will not be matchable", raw.name, n_inputs));
+            notes.push(format!(
+                "cell '{}' has {} inputs (outside [1,6]); will not be matchable",
+                raw.name, n_inputs
+            ));
             cells.push(CellDecl {
                 id: CellId(i as u32),
                 name: raw.name,
@@ -78,7 +81,11 @@ pub fn load_library(path: &str) -> Result<CellLib, OptCellsError> {
             .parse(raw.function.as_str())
             .into_result()
             .map_err(|errs| {
-                let m = errs.into_iter().next().map(|e| e.reason().to_string()).unwrap_or_default();
+                let m = errs
+                    .into_iter()
+                    .next()
+                    .map(|e| e.reason().to_string())
+                    .unwrap_or_default();
                 OptCellsError::ParseLibrary {
                     message: format!("cell '{}' function parse error: {}", raw.name, m),
                     source_name: path.into(),
@@ -119,14 +126,24 @@ fn eval_expr_to_aig<'a>(
 ) -> Result<crate::aig::Edge, String> {
     use crate::frontend::ast::Expr::*;
     match expr {
-        Lit { value: BitLiteral::Single(b), .. } => Ok(if *b { aig.const1() } else { aig.const0() }),
-        Lit { value: BitLiteral::Vector { .. }, .. } => Err("vector literal not allowed in cell function".into()),
+        Lit {
+            value: BitLiteral::Single(b),
+            ..
+        } => Ok(if *b { aig.const1() } else { aig.const0() }),
+        Lit {
+            value: BitLiteral::Vector { .. },
+            ..
+        } => Err("vector literal not allowed in cell function".into()),
         Ref { name, sel, .. } => {
             if sel.is_some() {
-                return Err(format!("bit-select not allowed in cell function on '{}'", name));
+                return Err(format!(
+                    "bit-select not allowed in cell function on '{}'",
+                    name
+                ));
             }
-            env.get(name.as_str()).copied()
-                .ok_or_else(|| format!("function references '{}' which is not in inputs list", name))
+            env.get(name.as_str()).copied().ok_or_else(|| {
+                format!("function references '{}' which is not in inputs list", name)
+            })
         }
         Not { inner, .. } => Ok(eval_expr_to_aig(inner, aig, env, _inputs)?.inv()),
         And { lhs, rhs, .. } => {
@@ -148,7 +165,11 @@ fn eval_expr_to_aig<'a>(
             let l = eval_expr_to_aig(lhs, aig, env, _inputs)?;
             let r = eval_expr_to_aig(rhs, aig, env, _inputs)?;
             let x = aig.xor(l, r);
-            Ok(if matches!(expr, Neq { .. }) { x } else { x.inv() })
+            Ok(if matches!(expr, Neq { .. }) {
+                x
+            } else {
+                x.inv()
+            })
         }
     }
 }
@@ -183,7 +204,11 @@ fn tt_from_aig(aig: &Aig, output_edge: crate::aig::Edge, k: u32) -> Tt64 {
         }
     }
     let out_tt = tt[output_edge.node.0 as usize];
-    if output_edge.invert { out_tt.not_in_k(k) } else { out_tt }
+    if output_edge.invert {
+        out_tt.not_in_k(k)
+    } else {
+        out_tt
+    }
 }
 
 #[cfg(test)]

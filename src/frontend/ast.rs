@@ -8,8 +8,16 @@ pub struct Program {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decl {
-    Input { name: String, width: Width, span: Span },
-    Output { name: String, width: Width, span: Span },
+    Input {
+        name: String,
+        width: Width,
+        span: Span,
+    },
+    Output {
+        name: String,
+        width: Width,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,14 +51,44 @@ pub struct Lvalue {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
-    Lit { value: BitLiteral, span: Span },
-    Ref { name: String, sel: Option<BitSel>, span: Span },
-    Not { inner: Box<Expr>, span: Span },
-    And { lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
-    Or { lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
-    Xor { lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
-    Eq { lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
-    Neq { lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
+    Lit {
+        value: BitLiteral,
+        span: Span,
+    },
+    Ref {
+        name: String,
+        sel: Option<BitSel>,
+        span: Span,
+    },
+    Not {
+        inner: Box<Expr>,
+        span: Span,
+    },
+    And {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
+    Or {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
+    Xor {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
+    Eq {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
+    Neq {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,7 +135,10 @@ mod tests {
 
     #[test]
     fn expr_span_round_trip() {
-        let e = Expr::Lit { value: BitLiteral::Single(true), span: Span::new(1, 2) };
+        let e = Expr::Lit {
+            value: BitLiteral::Single(true),
+            span: Span::new(1, 2),
+        };
         assert_eq!(e.span(), Span::new(1, 2));
     }
 }

@@ -12,7 +12,10 @@ impl Edge {
         Edge { node, invert }
     }
     pub fn inv(self) -> Self {
-        Edge { node: self.node, invert: !self.invert }
+        Edge {
+            node: self.node,
+            invert: !self.invert,
+        }
     }
 }
 

@@ -22,12 +22,17 @@ pub struct NpnLibIndex {
 
 impl NpnLibIndex {
     pub fn build(lib: &CellLib) -> Self {
-        let mut idx = NpnLibIndex { index: HashMap::new() };
+        let mut idx = NpnLibIndex {
+            index: HashMap::new(),
+        };
         for cell in &lib.cells {
-            if cell.n_inputs == 0 || cell.n_inputs > 6 { continue; }
+            if cell.n_inputs == 0 || cell.n_inputs > 6 {
+                continue;
+            }
             let info = npn_canonical(cell.tt.0, cell.n_inputs);
             let mut pin_perm = [0u8; 6];
-            pin_perm[..cell.n_inputs as usize].copy_from_slice(&info.input_perm[..cell.n_inputs as usize]);
+            pin_perm[..cell.n_inputs as usize]
+                .copy_from_slice(&info.input_perm[..cell.n_inputs as usize]);
             let mapping = InputMapping {
                 cell_id: cell.id,
                 n_inputs: cell.n_inputs as u8,
@@ -35,7 +40,10 @@ impl NpnLibIndex {
                 input_negation: info.input_negation,
                 output_negation: info.output_negation,
             };
-            idx.index.entry((info.canonical_tt, cell.n_inputs)).or_default().push(mapping);
+            idx.index
+                .entry((info.canonical_tt, cell.n_inputs))
+                .or_default()
+                .push(mapping);
         }
         idx
     }
@@ -119,11 +127,17 @@ mod tests {
     #[test]
     fn and4_matches_and4_with_input0_inverted() {
         // Library has plain AND4 with TT 0x8000.
-        let lib = CellLib { cells: vec![cell(0, "AND4", 4, 0x8000)], notes: vec![] };
+        let lib = CellLib {
+            cells: vec![cell(0, "AND4", 4, 0x8000)],
+            notes: vec![],
+        };
         let idx = NpnLibIndex::build(&lib);
         // Cut function: !a & b & c & d, TT = 0x0080.
         let matches = idx.matches(0x0080, 4);
-        assert!(!matches.is_empty(), "AND4 should match !a&b&c&d cut via NPN equivalence");
+        assert!(
+            !matches.is_empty(),
+            "AND4 should match !a&b&c&d cut via NPN equivalence"
+        );
         let m = &matches[0];
         assert!(!m.output_negation, "no output flip needed");
         // exactly one input must be inverted
@@ -132,7 +146,10 @@ mod tests {
 
     #[test]
     fn empty_index_no_match() {
-        let lib = CellLib { cells: vec![], notes: vec![] };
+        let lib = CellLib {
+            cells: vec![],
+            notes: vec![],
+        };
         let idx = NpnLibIndex::build(&lib);
         assert!(idx.matches(0x8, 2).is_empty());
     }

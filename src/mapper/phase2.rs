@@ -26,17 +26,29 @@ pub fn run(
     let mut cells: Vec<CellInstance> = Vec::new();
 
     while let Some((node, neg_polarity)) = queue.pop_front() {
-        if required.contains_key(&(node, neg_polarity)) { continue; }
+        if required.contains_key(&(node, neg_polarity)) {
+            continue;
+        }
 
         // PIs / Const0: wires only.
-        if matches!(aig.node(node).kind, NodeKind::Const0 | NodeKind::PrimaryInput { .. }) {
+        if matches!(
+            aig.node(node).kind,
+            NodeKind::Const0 | NodeKind::PrimaryInput { .. }
+        ) {
             required.insert((node, neg_polarity), None);
             continue;
         }
 
-        let choice_opt = if neg_polarity { p1.best_neg[node.0 as usize].as_ref() } else { p1.best_pos[node.0 as usize].as_ref() };
+        let choice_opt = if neg_polarity {
+            p1.best_neg[node.0 as usize].as_ref()
+        } else {
+            p1.best_pos[node.0 as usize].as_ref()
+        };
         let choice = choice_opt.ok_or_else(|| OptCellsError::Mapping {
-            message: format!("no library cell can implement function at AIG node {}", node.0),
+            message: format!(
+                "no library cell can implement function at AIG node {}",
+                node.0
+            ),
         })?;
 
         if choice.via_inv {
@@ -46,21 +58,32 @@ pub fn run(
                     node.0
                 ),
             })?;
-            let uid = uid_counter; uid_counter += 1;
+            let uid = uid_counter;
+            uid_counter += 1;
             cells.push(CellInstance {
                 uid,
                 cell_id: CellId(inv_id),
                 aig_node: node,
-                pin_inputs: vec![PinInput { leaf: node, invert: false }],
+                pin_inputs: vec![PinInput {
+                    leaf: node,
+                    invert: false,
+                }],
                 produces_negation: true,
             });
             required.insert((node, neg_polarity), Some(uid));
             queue.push_back((node, false));
         } else {
             let cut = &cuts[node.0 as usize][choice.cut_index];
-            let uid = uid_counter; uid_counter += 1;
+            let uid = uid_counter;
+            uid_counter += 1;
             let n_inputs = choice.mapping.n_inputs as usize;
-            let mut pin_inputs: Vec<PinInput> = vec![PinInput { leaf: NodeId(0), invert: false }; n_inputs];
+            let mut pin_inputs: Vec<PinInput> = vec![
+                PinInput {
+                    leaf: NodeId(0),
+                    invert: false
+                };
+                n_inputs
+            ];
             for (leaf_pos, &leaf) in cut.leaves.iter().enumerate() {
                 let pin = choice.mapping.pin_perm[leaf_pos] as usize;
                 let invert = (choice.mapping.input_negation >> leaf_pos) & 1 == 1;
@@ -88,11 +111,16 @@ pub fn run(
         .collect();
 
     let total = cells.len();
-    Ok(MappedNetlist { cells, outputs, total_cells: total })
+    Ok(MappedNetlist {
+        cells,
+        outputs,
+        total_cells: total,
+    })
 }
 
 fn find_inv_cell(lib: &CellLib) -> Option<u32> {
-    lib.cells.iter()
+    lib.cells
+        .iter()
         .find(|c| c.n_inputs == 1 && c.tt.0 == 0x1)
         .map(|c| c.id.0)
 }
@@ -103,14 +131,28 @@ mod tests {
     use crate::aig::enumerate_cuts;
     use crate::aig::Tt64;
     use crate::frontend::library::CellDecl;
-    use crate::match_npn::NpnLibIndex;
     use crate::mapper::phase1;
+    use crate::match_npn::NpnLibIndex;
 
     fn nand2_lib() -> CellLib {
         CellLib {
             cells: vec![
-                CellDecl { id: CellId(0), name: "INV".into(), inputs: vec!["a".into()], output_pin: "y".into(), tt: Tt64(0x1), n_inputs: 1 },
-                CellDecl { id: CellId(1), name: "NAND2".into(), inputs: vec!["a".into(), "b".into()], output_pin: "y".into(), tt: Tt64(0x7), n_inputs: 2 },
+                CellDecl {
+                    id: CellId(0),
+                    name: "INV".into(),
+                    inputs: vec!["a".into()],
+                    output_pin: "y".into(),
+                    tt: Tt64(0x1),
+                    n_inputs: 1,
+                },
+                CellDecl {
+                    id: CellId(1),
+                    name: "NAND2".into(),
+                    inputs: vec!["a".into(), "b".into()],
+                    output_pin: "y".into(),
+                    tt: Tt64(0x7),
+                    n_inputs: 2,
+                },
             ],
             notes: vec![],
         }

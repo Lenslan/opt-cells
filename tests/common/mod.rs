@@ -53,12 +53,18 @@ pub fn simulate_netlist(
     ordered.sort_by_key(|c| c.aig_node.0);
 
     for c in ordered {
-        let cell_decl = lib.cells.iter().find(|x| x.id == c.cell_id).expect("cell decl");
+        let cell_decl = lib
+            .cells
+            .iter()
+            .find(|x| x.id == c.cell_id)
+            .expect("cell decl");
         // Compute cell output by evaluating native TT over input pin values.
         let mut pattern: u32 = 0;
         for (pin_idx, pi) in c.pin_inputs.iter().enumerate() {
             let v = value[pi.leaf.0 as usize] ^ pi.invert;
-            if v { pattern |= 1u32 << pin_idx; }
+            if v {
+                pattern |= 1u32 << pin_idx;
+            }
         }
         let out_raw = (cell_decl.tt.0 >> pattern) & 1 == 1;
         let out = out_raw ^ c.produces_negation;

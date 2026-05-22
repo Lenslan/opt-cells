@@ -1,7 +1,11 @@
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name = "opt-cells", version, about = "Map combinational logic to minimum-cell-count cell library implementation")]
+#[command(
+    name = "opt-cells",
+    version,
+    about = "Map combinational logic to minimum-cell-count cell library implementation"
+)]
 pub struct Args {
     /// Path to DSL input file, or "-" for stdin.
     pub input: String,

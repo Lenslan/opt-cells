@@ -54,20 +54,39 @@ pub fn run(aig: &Aig, cuts: &[Vec<Cut>], idx: &NpnLibIndex) -> Phase1Result {
                 let mut feasible = true;
                 for (leaf_pos, &leaf) in cut.leaves.iter().enumerate() {
                     let want_negated = (m.input_negation >> leaf_pos) & 1 == 1;
-                    let leaf_cost = if want_negated { cost_neg[leaf.0 as usize] } else { cost_pos[leaf.0 as usize] };
-                    if leaf_cost >= INF { feasible = false; break; }
+                    let leaf_cost = if want_negated {
+                        cost_neg[leaf.0 as usize]
+                    } else {
+                        cost_pos[leaf.0 as usize]
+                    };
+                    if leaf_cost >= INF {
+                        feasible = false;
+                        break;
+                    }
                     leaves_total = leaves_total.saturating_add(leaf_cost);
                 }
-                if !feasible { continue; }
+                if !feasible {
+                    continue;
+                }
                 let total = leaves_total.saturating_add(1);
                 if !m.output_negation {
                     if total < cost_pos[idx_n] {
                         cost_pos[idx_n] = total;
-                        best_pos[idx_n] = Some(BestChoice { cost: total, cut_index, mapping: m, via_inv: false });
+                        best_pos[idx_n] = Some(BestChoice {
+                            cost: total,
+                            cut_index,
+                            mapping: m,
+                            via_inv: false,
+                        });
                     }
                 } else if total < cost_neg[idx_n] {
                     cost_neg[idx_n] = total;
-                    best_neg[idx_n] = Some(BestChoice { cost: total, cut_index, mapping: m, via_inv: false });
+                    best_neg[idx_n] = Some(BestChoice {
+                        cost: total,
+                        cut_index,
+                        mapping: m,
+                        via_inv: false,
+                    });
                 }
             }
         }
@@ -128,7 +147,9 @@ mod tests {
         let lib = make_nand2_lib();
         let idx = NpnLibIndex::build(&lib);
         let res = run(&aig, &cuts, &idx);
-        let neg_choice = res.best_neg[ab.node.0 as usize].as_ref().expect("must have neg choice");
+        let neg_choice = res.best_neg[ab.node.0 as usize]
+            .as_ref()
+            .expect("must have neg choice");
         assert_eq!(neg_choice.cost, 1);
         assert!(!neg_choice.via_inv);
     }

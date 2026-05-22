@@ -37,10 +37,18 @@ impl Tt64 {
         Tt64(tt & Self::mask(k))
     }
 
-    pub fn and(self, other: Tt64) -> Tt64 { Tt64(self.0 & other.0) }
-    pub fn or(self, other: Tt64) -> Tt64 { Tt64(self.0 | other.0) }
-    pub fn xor(self, other: Tt64) -> Tt64 { Tt64(self.0 ^ other.0) }
-    pub fn not_in_k(self, k: u32) -> Tt64 { Tt64((!self.0) & Self::mask(k)) }
+    pub fn and(self, other: Tt64) -> Tt64 {
+        Tt64(self.0 & other.0)
+    }
+    pub fn or(self, other: Tt64) -> Tt64 {
+        Tt64(self.0 | other.0)
+    }
+    pub fn xor(self, other: Tt64) -> Tt64 {
+        Tt64(self.0 ^ other.0)
+    }
+    pub fn not_in_k(self, k: u32) -> Tt64 {
+        Tt64((!self.0) & Self::mask(k))
+    }
 }
 
 #[cfg(test)]
@@ -67,9 +75,9 @@ mod tests {
     fn and_or_xor() {
         let a = Tt64::var(0, 2);
         let b = Tt64::var(1, 2);
-        assert_eq!(a.and(b), Tt64(0x8));     // a AND b = 1 only at pattern 11
-        assert_eq!(a.or(b), Tt64(0xE));      // a OR b = 1 at 01, 10, 11
-        assert_eq!(a.xor(b), Tt64(0x6));     // a XOR b = 1 at 01, 10
+        assert_eq!(a.and(b), Tt64(0x8)); // a AND b = 1 only at pattern 11
+        assert_eq!(a.or(b), Tt64(0xE)); // a OR b = 1 at 01, 10, 11
+        assert_eq!(a.xor(b), Tt64(0x6)); // a XOR b = 1 at 01, 10
     }
 
     #[test]

@@ -21,19 +21,27 @@ impl Aig {
             outputs: Vec::new(),
         };
         // index 0 reserved for Const0
-        aig.nodes.push(AigNode { kind: NodeKind::Const0 });
+        aig.nodes.push(AigNode {
+            kind: NodeKind::Const0,
+        });
         aig
     }
 
-    pub fn const0(&self) -> Edge { Edge::new(NodeId(0), false) }
-    pub fn const1(&self) -> Edge { Edge::new(NodeId(0), true) }
+    pub fn const0(&self) -> Edge {
+        Edge::new(NodeId(0), false)
+    }
+    pub fn const1(&self) -> Edge {
+        Edge::new(NodeId(0), true)
+    }
 
     pub fn add_input(&mut self, name: &str) -> Edge {
         if let Some(id) = self.pi_cache.get(name) {
             return Edge::new(*id, false);
         }
         let id = NodeId(self.nodes.len() as u32);
-        self.nodes.push(AigNode { kind: NodeKind::PrimaryInput { name: name.into() } });
+        self.nodes.push(AigNode {
+            kind: NodeKind::PrimaryInput { name: name.into() },
+        });
         self.pi_cache.insert(name.into(), id);
         Edge::new(id, false)
     }
@@ -47,8 +55,12 @@ impl Aig {
         if b.node == NodeId(0) {
             return if b.invert { a } else { self.const0() };
         }
-        if a == b { return a; }
-        if a.node == b.node && a.invert != b.invert { return self.const0(); }
+        if a == b {
+            return a;
+        }
+        if a.node == b.node && a.invert != b.invert {
+            return self.const0();
+        }
 
         // Normalize: smaller node id on the left.
         let (l, r) = if a.node <= b.node { (a, b) } else { (b, a) };
@@ -57,7 +69,9 @@ impl Aig {
             return Edge::new(*id, false);
         }
         let id = NodeId(self.nodes.len() as u32);
-        self.nodes.push(AigNode { kind: NodeKind::And2 { l, r } });
+        self.nodes.push(AigNode {
+            kind: NodeKind::And2 { l, r },
+        });
         self.and_cache.insert(key, id);
         Edge::new(id, false)
     }
@@ -79,14 +93,24 @@ impl Aig {
         self.outputs.push((name.into(), e));
     }
 
-    pub fn nodes(&self) -> &[AigNode] { &self.nodes }
-    pub fn node(&self, id: NodeId) -> &AigNode { &self.nodes[id.0 as usize] }
-    pub fn num_nodes(&self) -> usize { self.nodes.len() }
-    pub fn outputs(&self) -> &[(String, Edge)] { &self.outputs }
+    pub fn nodes(&self) -> &[AigNode] {
+        &self.nodes
+    }
+    pub fn node(&self, id: NodeId) -> &AigNode {
+        &self.nodes[id.0 as usize]
+    }
+    pub fn num_nodes(&self) -> usize {
+        self.nodes.len()
+    }
+    pub fn outputs(&self) -> &[(String, Edge)] {
+        &self.outputs
+    }
 }
 
 impl Default for Aig {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

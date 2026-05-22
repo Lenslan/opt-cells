@@ -17,18 +17,27 @@ fn run(input_rel: &str, library_rel: &str) -> String {
         input_path,
         input_text,
         library_path,
-    }).expect("pipeline ok");
+    })
+    .expect("pipeline ok");
     report
 }
 
 fn assert_golden(actual: &str, expected_rel: &str) {
-    let path = format!("{}/tests/fixtures/{}", env!("CARGO_MANIFEST_DIR"), expected_rel);
+    let path = format!(
+        "{}/tests/fixtures/{}",
+        env!("CARGO_MANIFEST_DIR"),
+        expected_rel
+    );
     if std::env::var("UPDATE_GOLDEN").is_ok() {
         std::fs::write(&path, actual).unwrap();
         return;
     }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|_| panic!("missing golden {}; run with UPDATE_GOLDEN=1 to create", path));
+    let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+        panic!(
+            "missing golden {}; run with UPDATE_GOLDEN=1 to create",
+            path
+        )
+    });
     if actual != expected {
         eprintln!("--- expected ---\n{}", expected);
         eprintln!("--- actual ---\n{}", actual);

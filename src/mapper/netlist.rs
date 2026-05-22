@@ -28,6 +28,10 @@ pub struct MappedNetlist {
 
 impl MappedNetlist {
     pub fn empty() -> Self {
-        MappedNetlist { cells: vec![], outputs: vec![], total_cells: 0 }
+        MappedNetlist {
+            cells: vec![],
+            outputs: vec![],
+            total_cells: 0,
+        }
     }
 }

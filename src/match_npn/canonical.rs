@@ -11,9 +11,9 @@ use crate::aig::Tt64;
 pub struct NpnInfo {
     pub canonical_tt: u64,
     pub k: u32,
-    pub input_perm: [u8; 6],       // input_perm[i] = original input index that ends up at canonical position i
-    pub input_negation: u8,        // bit i set => input at canonical position i was negated
-    pub output_negation: bool,     // true => output was inverted to reach canonical
+    pub input_perm: [u8; 6], // input_perm[i] = original input index that ends up at canonical position i
+    pub input_negation: u8,  // bit i set => input at canonical position i was negated
+    pub output_negation: bool, // true => output was inverted to reach canonical
 }
 
 /// Apply (input_perm, input_negation, output_negation) to truth table `tt`
@@ -28,11 +28,15 @@ pub fn apply_transform(tt: u64, k: u32, perm: &[u8; 6], in_neg: u8, out_neg: boo
         let mut orig_p: u64 = 0;
         for i in 0..k {
             let mut v = (p >> i) & 1;
-            if (in_neg >> i) & 1 == 1 { v ^= 1; }
+            if (in_neg >> i) & 1 == 1 {
+                v ^= 1;
+            }
             orig_p |= v << (perm[i as usize] as u64);
         }
         let mut bit = (tt >> orig_p) & 1;
-        if out_neg { bit ^= 1; }
+        if out_neg {
+            bit ^= 1;
+        }
         result |= bit << p;
     }
     result & mask
@@ -118,7 +122,10 @@ mod tests {
         // AND4 with input 3 inverted: only 0111 → bit 7 set → 0x0080
         let a = npn_canonical(0x8000, 4);
         let b = npn_canonical(0x0080, 4);
-        assert_eq!(a.canonical_tt, b.canonical_tt, "AND4 and AND4-with-one-inverted-input should share NPN class");
+        assert_eq!(
+            a.canonical_tt, b.canonical_tt,
+            "AND4 and AND4-with-one-inverted-input should share NPN class"
+        );
     }
 
     #[test]
@@ -132,7 +139,13 @@ mod tests {
     fn transform_round_trip() {
         let tt = 0x8u64; // AND2
         let info = npn_canonical(tt, 2);
-        let recomputed = apply_transform(tt, 2, &info.input_perm, info.input_negation, info.output_negation);
+        let recomputed = apply_transform(
+            tt,
+            2,
+            &info.input_perm,
+            info.input_negation,
+            info.output_negation,
+        );
         assert_eq!(recomputed, info.canonical_tt);
     }
 }

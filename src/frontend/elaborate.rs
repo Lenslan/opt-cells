@@ -63,35 +63,72 @@ impl Elaborator {
         Ok(())
     }
 
-    fn lookup_signal(&self, name: &str, sel: Option<BitSel>, span: Span) -> Result<Edge, OptCellsError> {
-        let w = self.decl_widths.get(name)
+    fn lookup_signal(
+        &self,
+        name: &str,
+        sel: Option<BitSel>,
+        span: Span,
+    ) -> Result<Edge, OptCellsError> {
+        let w = self
+            .decl_widths
+            .get(name)
             .ok_or_else(|| self.err(format!("undefined signal '{}'", name), span))?;
         match (w, sel) {
-            (Width::Bit, None) => self.signals.get(name).copied()
-                .ok_or_else(|| self.err(format!("signal '{}' used before assignment", name), span)),
-            (Width::Bit, Some(_)) => Err(self.err(format!("signal '{}' is single-bit; cannot index", name), span)),
+            (Width::Bit, None) => {
+                self.signals.get(name).copied().ok_or_else(|| {
+                    self.err(format!("signal '{}' used before assignment", name), span)
+                })
+            }
+            (Width::Bit, Some(_)) => Err(self.err(
+                format!("signal '{}' is single-bit; cannot index", name),
+                span,
+            )),
             (Width::Vector { hi, lo }, Some(BitSel::Index(i))) => {
                 let lo_val = (*lo).min(*hi);
                 let hi_val = (*lo).max(*hi);
                 if i < lo_val || i > hi_val {
-                    return Err(self.err(format!("index {} out of range [{}:{}]", i, hi_val, lo_val), span));
+                    return Err(self.err(
+                        format!("index {} out of range [{}:{}]", i, hi_val, lo_val),
+                        span,
+                    ));
                 }
                 let internal = format!("{}__{}", name, i);
-                self.signals.get(&internal).copied()
-                    .ok_or_else(|| self.err(format!("signal '{}' used before assignment", internal), span))
+                self.signals.get(&internal).copied().ok_or_else(|| {
+                    self.err(
+                        format!("signal '{}' used before assignment", internal),
+                        span,
+                    )
+                })
             }
             (Width::Vector { .. }, None) | (Width::Vector { .. }, Some(BitSel::Range { .. })) => {
-                Err(self.err(format!("vector use of '{}' must appear in equality comparison only", name), span))
+                Err(self.err(
+                    format!(
+                        "vector use of '{}' must appear in equality comparison only",
+                        name
+                    ),
+                    span,
+                ))
             }
         }
     }
 
     fn build_expr(&mut self, e: &Expr) -> Result<Edge, OptCellsError> {
         match e {
-            Expr::Lit { value: BitLiteral::Single(b), .. } => Ok(if *b { self.aig.const1() } else { self.aig.const0() }),
-            Expr::Lit { value: BitLiteral::Vector { .. }, span } => {
-                Err(self.err("vector literal not allowed in scalar context (must appear in == or != only)", *span))
-            }
+            Expr::Lit {
+                value: BitLiteral::Single(b),
+                ..
+            } => Ok(if *b {
+                self.aig.const1()
+            } else {
+                self.aig.const0()
+            }),
+            Expr::Lit {
+                value: BitLiteral::Vector { .. },
+                span,
+            } => Err(self.err(
+                "vector literal not allowed in scalar context (must appear in == or != only)",
+                *span,
+            )),
             Expr::Ref { name, sel, span } => self.lookup_signal(name, *sel, *span),
             Expr::Not { inner, .. } => Ok(self.build_expr(inner)?.inv()),
             Expr::And { lhs, rhs, .. } => {
@@ -122,7 +159,10 @@ impl Elaborator {
         let lw = self.expr_width(lhs)?;
         let rw = self.expr_width(rhs)?;
         if lw != rw {
-            return Err(self.err(format!("width mismatch: lhs is {} bits, rhs is {} bits", lw, rw), span));
+            return Err(self.err(
+                format!("width mismatch: lhs is {} bits, rhs is {} bits", lw, rw),
+                span,
+            ));
         }
         if lw == 1 {
             let l = self.build_expr(lhs)?;
@@ -145,14 +185,24 @@ impl Elaborator {
 
     fn expr_width(&self, e: &Expr) -> Result<u32, OptCellsError> {
         match e {
-            Expr::Lit { value: BitLiteral::Single(_), .. } => Ok(1),
-            Expr::Lit { value: BitLiteral::Vector { width, .. }, .. } => Ok(*width),
+            Expr::Lit {
+                value: BitLiteral::Single(_),
+                ..
+            } => Ok(1),
+            Expr::Lit {
+                value: BitLiteral::Vector { width, .. },
+                ..
+            } => Ok(*width),
             Expr::Ref { name, sel, span } => {
-                let w = self.decl_widths.get(name)
+                let w = self
+                    .decl_widths
+                    .get(name)
                     .ok_or_else(|| self.err(format!("undefined signal '{}'", name), *span))?;
                 match (w, sel) {
                     (Width::Bit, None) => Ok(1),
-                    (Width::Bit, Some(_)) => Err(self.err(format!("'{}' is single-bit", name), *span)),
+                    (Width::Bit, Some(_)) => {
+                        Err(self.err(format!("'{}' is single-bit", name), *span))
+                    }
                     (Width::Vector { hi, lo }, None) => {
                         let (lo, hi) = (lo.min(hi), lo.max(hi));
                         Ok(hi - lo + 1)
@@ -162,7 +212,10 @@ impl Elaborator {
                         let (lo, hi) = (lo.min(hi), lo.max(hi));
                         let (l2, h2) = (l2.min(h2), l2.max(h2));
                         if l2 < lo || h2 > hi {
-                            return Err(self.err(format!("slice [{}:{}] out of range [{}:{}]", h2, l2, hi, lo), *span));
+                            return Err(self.err(
+                                format!("slice [{}:{}] out of range [{}:{}]", h2, l2, hi, lo),
+                                *span,
+                            ));
                         }
                         Ok(h2 - l2 + 1)
                     }
@@ -174,16 +227,26 @@ impl Elaborator {
 
     fn expand_to_bits(&mut self, e: &Expr) -> Result<Vec<Edge>, OptCellsError> {
         match e {
-            Expr::Lit { value: BitLiteral::Vector { width, value }, .. } => {
+            Expr::Lit {
+                value: BitLiteral::Vector { width, value },
+                ..
+            } => {
                 let mut bits = Vec::with_capacity(*width as usize);
                 for i in 0..*width {
                     let b = (value >> i) & 1 == 1;
-                    bits.push(if b { self.aig.const1() } else { self.aig.const0() });
+                    bits.push(if b {
+                        self.aig.const1()
+                    } else {
+                        self.aig.const0()
+                    });
                 }
                 Ok(bits)
             }
             Expr::Ref { name, sel, span } => {
-                let w = self.decl_widths.get(name).copied()
+                let w = self
+                    .decl_widths
+                    .get(name)
+                    .copied()
                     .ok_or_else(|| self.err(format!("undefined signal '{}'", name), *span))?;
                 match (w, sel) {
                     (Width::Vector { hi, lo }, None) => {
@@ -191,8 +254,9 @@ impl Elaborator {
                         let mut bits = Vec::with_capacity((hi - lo + 1) as usize);
                         for i in lo..=hi {
                             let internal = format!("{}__{}", name, i);
-                            let edge = self.signals.get(&internal).copied()
-                                .ok_or_else(|| self.err(format!("'{}' used before assignment", internal), *span))?;
+                            let edge = self.signals.get(&internal).copied().ok_or_else(|| {
+                                self.err(format!("'{}' used before assignment", internal), *span)
+                            })?;
                             bits.push(edge);
                         }
                         Ok(bits)
@@ -201,13 +265,17 @@ impl Elaborator {
                         let (lo, hi) = (lo.min(hi), lo.max(hi));
                         let (l2, h2) = (*l2.min(h2), *l2.max(h2));
                         if l2 < lo || h2 > hi {
-                            return Err(self.err(format!("slice [{}:{}] out of range [{}:{}]", h2, l2, hi, lo), *span));
+                            return Err(self.err(
+                                format!("slice [{}:{}] out of range [{}:{}]", h2, l2, hi, lo),
+                                *span,
+                            ));
                         }
                         let mut bits = Vec::new();
                         for i in l2..=h2 {
                             let internal = format!("{}__{}", name, i);
-                            let edge = self.signals.get(&internal).copied()
-                                .ok_or_else(|| self.err(format!("'{}' used before assignment", internal), *span))?;
+                            let edge = self.signals.get(&internal).copied().ok_or_else(|| {
+                                self.err(format!("'{}' used before assignment", internal), *span)
+                            })?;
                             bits.push(edge);
                         }
                         Ok(bits)
@@ -221,8 +289,12 @@ impl Elaborator {
 
     fn assign_stmt(&mut self, s: &Stmt) -> Result<(), OptCellsError> {
         let rhs = self.build_expr(&s.rhs)?;
-        let target_w = self.decl_widths.get(&s.lhs.name).copied()
-            .ok_or_else(|| self.err(format!("assignment to undeclared signal '{}'", s.lhs.name), s.lhs.span))?;
+        let target_w = self.decl_widths.get(&s.lhs.name).copied().ok_or_else(|| {
+            self.err(
+                format!("assignment to undeclared signal '{}'", s.lhs.name),
+                s.lhs.span,
+            )
+        })?;
         match (target_w, s.lhs.index) {
             (Width::Bit, None) => {
                 self.signals.insert(s.lhs.name.clone(), rhs);
@@ -255,7 +327,11 @@ impl Elaborator {
     }
 }
 
-pub fn elaborate(program: &Program, source_name: &str, source_text: &str) -> Result<ElabResult, OptCellsError> {
+pub fn elaborate(
+    program: &Program,
+    source_name: &str,
+    source_text: &str,
+) -> Result<ElabResult, OptCellsError> {
     let mut el = Elaborator {
         aig: Aig::new(),
         decl_widths: HashMap::new(),
@@ -273,7 +349,10 @@ pub fn elaborate(program: &Program, source_name: &str, source_text: &str) -> Res
     for s in &program.stmts {
         el.assign_stmt(s)?;
     }
-    Ok(ElabResult { aig: el.aig, display_names: el.display })
+    Ok(ElabResult {
+        aig: el.aig,
+        display_names: el.display,
+    })
 }
 
 #[cfg(test)]
@@ -283,7 +362,10 @@ mod tests {
     use chumsky::Parser;
 
     fn elab(src: &str) -> ElabResult {
-        let prog = program_parser().parse(src).into_result().expect("parse failed");
+        let prog = program_parser()
+            .parse(src)
+            .into_result()
+            .expect("parse failed");
         elaborate(&prog, "test", src).expect("elaborate failed")
     }
 
@@ -307,7 +389,8 @@ mod tests {
     fn undefined_signal_errors() {
         let prog = program_parser()
             .parse("input a; output y; y = a & b;")
-            .into_result().expect("parse ok");
+            .into_result()
+            .expect("parse ok");
         let err = elaborate(&prog, "test", "input a; output y; y = a & b;").unwrap_err();
         let msg = format!("{}", err);
         assert!(msg.contains("undefined"));
@@ -317,7 +400,8 @@ mod tests {
     fn multi_bit_lhs_rejected() {
         let prog = program_parser()
             .parse("input a; output y[3:0]; y = a;")
-            .into_result().expect("parse ok");
+            .into_result()
+            .expect("parse ok");
         let err = elaborate(&prog, "test", "input a; output y[3:0]; y = a;").unwrap_err();
         assert!(format!("{}", err).contains("multi-bit"));
     }
@@ -334,8 +418,10 @@ mod tests {
     fn width_mismatch_in_eq() {
         let prog = program_parser()
             .parse("input s[3:0]; output y; y = (s == 3'b011);")
-            .into_result().expect("parse ok");
-        let err = elaborate(&prog, "test", "input s[3:0]; output y; y = (s == 3'b011);").unwrap_err();
+            .into_result()
+            .expect("parse ok");
+        let err =
+            elaborate(&prog, "test", "input s[3:0]; output y; y = (s == 3'b011);").unwrap_err();
         assert!(format!("{}", err).contains("width mismatch"));
     }
 }

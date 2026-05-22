@@ -135,6 +135,10 @@ function = "a | b"
     let lib2 = opt_cells::frontend::library::load_library(t2.path().to_str().unwrap()).unwrap();
     let n2 = opt_cells::mapper::map_aig(&aig, &lib2).unwrap();
 
-    assert!(n2.total_cells <= n1.total_cells, "adding XOR2 should not increase cell count: {} vs {}", n2.total_cells, n1.total_cells);
+    assert!(
+        n2.total_cells <= n1.total_cells,
+        "adding XOR2 should not increase cell count: {} vs {}",
+        n2.total_cells,
+        n1.total_cells
+    );
 }
-

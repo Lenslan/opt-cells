@@ -9,7 +9,10 @@ fn main() -> ExitCode {
     let args = Args::parse();
     let (text, name) = match read_input(&args.input) {
         Ok(p) => p,
-        Err(e) => { eprintln!("error: {}", e); return ExitCode::from(1); }
+        Err(e) => {
+            eprintln!("error: {}", e);
+            return ExitCode::from(1);
+        }
     };
     let result = run_pipeline(RunInputs {
         input_path: name,
