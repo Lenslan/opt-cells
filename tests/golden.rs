@@ -45,3 +45,21 @@ fn decode_and4() {
     let s = run("inputs/decode.dsl", "libs/with_and4.toml");
     assert_golden(&s, "expected/decode_and4.txt");
 }
+
+#[test]
+fn nand_with_and2_inv_only() {
+    let s = run("inputs/nand.dsl", "libs/and2_only.toml");
+    assert_golden(&s, "expected/nand_and2_only.txt");
+}
+
+#[test]
+fn shared_subexpression() {
+    let s = run("inputs/shared.dsl", "libs/basic.toml");
+    assert_golden(&s, "expected/shared_basic.txt");
+}
+
+#[test]
+fn mux_basic() {
+    let s = run("inputs/mux.dsl", "libs/basic.toml");
+    assert_golden(&s, "expected/mux_basic.txt");
+}
