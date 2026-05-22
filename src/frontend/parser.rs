@@ -38,8 +38,8 @@ pub fn expr_parser<'src>() -> impl Parser<'src, &'src str, Expr, extra::Err<Rich
         .map_with(|b, e| Expr::Lit { value: BitLiteral::Single(b), span: to_span(e.span()) });
 
         // bit-select: [i] or [hi:lo]
-        let bit_sel = uint.clone()
-            .then(just(':').padded().ignore_then(uint.clone()).or_not())
+        let bit_sel = uint
+            .then(just(':').padded().ignore_then(uint).or_not())
             .delimited_by(just('[').padded(), just(']').padded())
             .map(|(a, b)| match b {
                 Some(lo) => BitSel::Range { hi: a, lo },
