@@ -22,6 +22,8 @@ pub enum OptCellsError {
     Io(#[from] std::io::Error),
     #[error("parse error in DSL: {message}")]
     ParseDsl { message: String, span: Span, source_name: String, source_text: String },
+    /// Library-level error (e.g. TOML syntax, validation). Library files are
+    /// addressed by name only; we don't track byte-level source positions for them.
     #[error("parse error in library: {message}")]
     ParseLibrary { message: String, source_name: String },
     #[error("elaboration error: {message}")]
@@ -64,5 +66,28 @@ mod tests {
     fn error_display_includes_message() {
         let e = OptCellsError::Mapping { message: "no match".into() };
         assert!(format!("{}", e).contains("no match"));
+    }
+
+    #[test]
+    fn render_parse_dsl_produces_output() {
+        let err = OptCellsError::ParseDsl {
+            message: "unexpected token".into(),
+            span: Span::new(0, 5),
+            source_name: "test.dsl".into(),
+            source_text: "input a;".into(),
+        };
+        let mut buf: Vec<u8> = Vec::new();
+        err.render(&mut buf).expect("render ok");
+        assert!(!buf.is_empty(), "render should produce non-empty output");
+    }
+
+    #[test]
+    fn render_mapping_uses_fallback() {
+        let err = OptCellsError::Mapping { message: "no cell".into() };
+        let mut buf: Vec<u8> = Vec::new();
+        err.render(&mut buf).expect("render ok");
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("error:"));
+        assert!(s.contains("no cell"));
     }
 }
