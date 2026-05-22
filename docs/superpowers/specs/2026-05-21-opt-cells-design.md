@@ -407,7 +407,7 @@ Three sections: summary, mapped netlist, cell usage.
   u1 : INV    (a=n1)             -> z1
   u2 : AND2   (a=n1, b=z2)       -> out
   ```
-- Verbose mode (`-v`) appends a Debug section listing per-node candidate cuts, their NPN classes, matched cells, and chosen cell
+- Verbose mode is not implemented; the `-v` flag was removed during cleanup. (A future per-node Debug section listing candidate cuts, NPN classes, matched cells, and chosen cell may be reintroduced if needed.)
 
 ### 7.4 Failure modes in the report
 
@@ -550,7 +550,6 @@ Arguments:
 Options:
   -l, --library <FILE>   Cell library TOML file        [required]
   -o, --output <FILE>    Write report to file (default: stdout)
-  -v, --verbose          Show per-node cuts and matches
   -q, --quiet            Only show cell-count summary
   -h, --help
   -V, --version
@@ -561,7 +560,6 @@ Options:
 ```bash
 opt-cells -l libs/basic.toml examples/decode.dsl
 echo 'input a, b; output y; y = !(a & b);' | opt-cells -l libs/basic.toml -
-opt-cells -l libs/basic.toml -v examples/big.dsl
 ```
 
 ### 10.3 Exit codes
@@ -575,16 +573,6 @@ opt-cells -l libs/basic.toml -v examples/big.dsl
 
 - **Default**: full report (summary + netlist + cell usage)
 - **`-q` quiet**: single line `total cells: N` — for batch evaluation scripts
-- **`-v` verbose**: full report + per-node debug analysis
-
-```
-─── Debug: cut analysis ───────────────────────────────────────
-node u3 (function 0x6996):
-  cut {a, b}        npn=0x6 (XOR)   -> XOR2[a,b] cost 1
-  cut {a, b, n2}    npn=...         -> (no match)
-  trivial {u3}      npn=0x6         -> XOR2[a,b] cost 1
-  → chosen: XOR2(a,b), cost 1
-```
 
 ### 10.5 Stdin
 

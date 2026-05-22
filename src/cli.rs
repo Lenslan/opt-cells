@@ -18,10 +18,6 @@ pub struct Args {
     #[arg(short = 'o', long = "output")]
     pub output: Option<String>,
 
-    /// Show per-node cuts and matches.
-    #[arg(short = 'v', long = "verbose")]
-    pub verbose: bool,
-
     /// Only show cell-count summary.
     #[arg(short = 'q', long = "quiet")]
     pub quiet: bool,

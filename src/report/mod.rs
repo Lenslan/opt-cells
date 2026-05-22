@@ -80,7 +80,14 @@ pub fn render(r: &ReportInput) -> String {
         // Determine output target: PO name if this node drives one; else internal uX.
         let out_label = if let Some(pos) = po_at.get(&c.aig_node) {
             pos.iter()
-                .map(|(n, inv)| if *inv { format!("!{}", n) } else { n.clone() })
+                .map(|(n, inv)| {
+                    let phys_inv = *inv ^ c.produces_negation;
+                    if phys_inv {
+                        format!("!{}", n)
+                    } else {
+                        n.clone()
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         } else {
