@@ -1,0 +1,29 @@
+[[cell]]
+name = "INV"
+inputs = ["a"]
+output = "y"
+function = "!a"
+
+[[cell]]
+name = "AND2"
+inputs = ["a", "b"]
+output = "y"
+function = "a & b"
+
+[[cell]]
+name = "OR2"
+inputs = ["a", "b"]
+output = "y"
+function = "a | b"
+
+[[cell]]
+name = "NAND2"
+inputs = ["a", "b"]
+output = "y"
+function = "!(a & b)"
+
+[[cell]]
+name = "NOR2"
+inputs = ["a", "b"]
+output = "y"
+function = "!(a | b)"

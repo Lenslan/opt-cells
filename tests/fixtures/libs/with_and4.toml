@@ -1,0 +1,23 @@
+[[cell]]
+name = "INV"
+inputs = ["a"]
+output = "y"
+function = "!a"
+
+[[cell]]
+name = "AND2"
+inputs = ["a", "b"]
+output = "y"
+function = "a & b"
+
+[[cell]]
+name = "AND4"
+inputs = ["a", "b", "c", "d"]
+output = "y"
+function = "a & b & c & d"
+
+[[cell]]
+name = "NAND2"
+inputs = ["a", "b"]
+output = "y"
+function = "!(a & b)"
