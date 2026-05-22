@@ -118,6 +118,102 @@ pub fn expr_parser<'src>() -> impl Parser<'src, &'src str, Expr, extra::Err<Rich
     })
 }
 
+pub fn decl_parser<'src>() -> impl Parser<'src, &'src str, Vec<Decl>, extra::Err<Rich<'src, char>>> + Clone {
+    let ident = text::ident().padded().map(|s: &str| s.to_string());
+    let uint = text::int(10)
+        .padded()
+        .map(|s: &str| s.parse::<u32>().unwrap());
+
+    let width = uint
+        .then_ignore(just(':').padded())
+        .then(uint)
+        .delimited_by(just('[').padded(), just(']').padded())
+        .map(|(hi, lo)| Width::Vector { hi, lo })
+        .or_not()
+        .map(|w| w.unwrap_or(Width::Bit));
+
+    let name_with_width = ident.then(width);
+
+    // Reusable input declaration body
+    let one_input = text::keyword("input")
+        .padded()
+        .ignore_then(
+            name_with_width
+                .map_with(|(name, w), e| Decl::Input { name, width: w, span: to_span(e.span()) })
+                .separated_by(just(',').padded())
+                .at_least(1)
+                .collect::<Vec<_>>(),
+        )
+        .then_ignore(just(';').padded());
+
+    // Reusable output declaration body
+    let one_output = text::keyword("output")
+        .padded()
+        .ignore_then(
+            name_with_width
+                .map_with(|(name, w), e| Decl::Output { name, width: w, span: to_span(e.span()) })
+                .separated_by(just(',').padded())
+                .at_least(1)
+                .collect::<Vec<_>>(),
+        )
+        .then_ignore(just(';').padded());
+
+    choice((one_input, one_output))
+        .repeated()
+        .collect::<Vec<Vec<Decl>>>()
+        .map(|v| v.into_iter().flatten().collect())
+}
+
+pub fn stmt_parser<'src>() -> impl Parser<'src, &'src str, Stmt, extra::Err<Rich<'src, char>>> + Clone {
+    let ident = text::ident().padded().map(|s: &str| s.to_string());
+    let uint = text::int(10)
+        .padded()
+        .map(|s: &str| s.parse::<u32>().unwrap());
+
+    let lvalue = ident
+        .then(uint.delimited_by(just('[').padded(), just(']').padded()).or_not())
+        .map_with(|(name, idx), e| Lvalue {
+            name,
+            index: idx,
+            span: to_span(e.span()),
+        });
+
+    lvalue
+        .then_ignore(just('=').padded())
+        .then(expr_parser())
+        .then_ignore(just(';').padded())
+        .map_with(|(lhs, rhs), e| Stmt {
+            lhs,
+            rhs,
+            span: to_span(e.span()),
+        })
+}
+
+pub fn program_parser<'src>() -> impl Parser<'src, &'src str, Program, extra::Err<Rich<'src, char>>> + Clone {
+    decl_parser()
+        .then(stmt_parser().repeated().collect::<Vec<_>>())
+        .then_ignore(end())
+        .map(|(decls, stmts)| Program { decls, stmts })
+}
+
+pub fn parse_program(
+    source: &str,
+    source_name: &str,
+) -> Result<Program, crate::error::OptCellsError> {
+    program_parser()
+        .parse(source)
+        .into_result()
+        .map_err(|errs| {
+            let first = errs.into_iter().next().unwrap();
+            crate::error::OptCellsError::ParseDsl {
+                message: format!("{}", first.reason()),
+                span: to_span(*first.span()),
+                source_name: source_name.into(),
+                source_text: source.into(),
+            }
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,5 +323,57 @@ mod tests {
         if let Expr::Not { inner, .. } = e {
             assert!(matches!(*inner, Expr::And { .. }));
         } else { panic!("expected NOT"); }
+    }
+
+    fn parse_full(src: &str) -> Program {
+        program_parser().parse(src).into_result().expect("parse failed")
+    }
+
+    #[test]
+    fn input_bit_decl() {
+        let p = parse_full("input a;");
+        assert_eq!(p.decls.len(), 1);
+        assert!(matches!(p.decls[0], Decl::Input { width: Width::Bit, .. }));
+    }
+
+    #[test]
+    fn input_vector_decl() {
+        let p = parse_full("input state[3:0];");
+        if let Decl::Input { width: Width::Vector { hi, lo }, .. } = &p.decls[0] {
+            assert_eq!((*hi, *lo), (3, 0));
+        } else { panic!(); }
+    }
+
+    #[test]
+    fn multiple_inputs_comma() {
+        let p = parse_full("input a, b, c;");
+        assert_eq!(p.decls.len(), 3);
+    }
+
+    #[test]
+    fn output_decl() {
+        let p = parse_full("output y;");
+        assert!(matches!(p.decls[0], Decl::Output { .. }));
+    }
+
+    #[test]
+    fn simple_assignment() {
+        let p = parse_full("input a, b; output y; y = a & b;");
+        assert_eq!(p.stmts.len(), 1);
+        assert_eq!(p.stmts[0].lhs.name, "y");
+    }
+
+    #[test]
+    fn motivating_example_one() {
+        let p = parse_full("input a, b; output y; y = !(a & b);");
+        assert_eq!(p.stmts.len(), 1);
+        assert!(matches!(p.stmts[0].rhs, Expr::Not { .. }));
+    }
+
+    #[test]
+    fn motivating_example_two() {
+        let p = parse_full("input state[3:0]; output decoded; decoded = (state == 4'b0111);");
+        assert_eq!(p.stmts.len(), 1);
+        assert!(matches!(p.stmts[0].rhs, Expr::Eq { .. }));
     }
 }
