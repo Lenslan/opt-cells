@@ -20,7 +20,7 @@ struct CellRaw {
     function: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CellId(pub u32);
 
 #[derive(Debug, Clone)]
