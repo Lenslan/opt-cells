@@ -1,3 +1,5 @@
+mod common;
+
 use opt_cells::{run_pipeline, RunInputs};
 
 fn read_fixture(rel: &str) -> String {
