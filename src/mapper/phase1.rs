@@ -167,4 +167,31 @@ mod tests {
         assert_eq!(neg_choice.cost, 1);
         assert!(!neg_choice.via_inv);
     }
+
+    #[test]
+    fn primary_input_complement_costs_an_inv() {
+        // spec §5: a complemented primary input costs a real INV (1) when one exists,
+        // and is infeasible (None) when the library has no INV cell.
+        let mut aig = Aig::new();
+        let a = aig.add_input("a");
+        let b = aig.add_input("b");
+        let _ab = aig.and(a, b);
+        aig.add_output("y", a.inv());
+        let cuts = enumerate_cuts(&aig);
+        let lib = make_nand2_lib();
+        let idx = NpnLibIndex::build(&lib);
+
+        let with_inv = run(&aig, &cuts, &idx, true);
+        let neg = with_inv.best_neg[a.node.0 as usize]
+            .as_ref()
+            .expect("PI complement is feasible when an INV exists");
+        assert_eq!(neg.cost, 1, "complemented PI costs exactly one INV");
+        assert!(neg.via_inv, "PI complement is produced by an INV cell");
+
+        let without_inv = run(&aig, &cuts, &idx, false);
+        assert!(
+            without_inv.best_neg[a.node.0 as usize].is_none(),
+            "no INV cell => complemented PI is infeasible"
+        );
+    }
 }
