@@ -15,9 +15,15 @@ It is positioned as an **industrial-grade synthesizer subset** — meaningfully 
 ### 1.1 Motivating examples
 
 - Input `y = !(a & b);` with a library containing `NAND2` should yield a 1-cell mapping (one `NAND2`), not 2 cells (`AND2` + `INV`).
-- Input `decoded = (state[3:0] == 4'b0111);` with a library containing `AND4` should yield a 1-cell mapping (one `AND4` with the highest-bit input inverted), not 4+ cells.
+- Input `decoded = (state[3:0] == 4'b0111);` with a library containing `AND4` + `INV` should yield a
+  compact **2-cell** mapping (one `AND4` plus one `INV` on the inverted high bit), not 4+ cells — or a
+  single cell if the library supplies a native inverted-input variant such as `AND4B1`.
 
-The user does **not** need to enumerate input-inversion variants of cells in the library — NPN-equivalence matching handles that automatically.
+Cells are used exactly as the library defines them. Input **permutation** is free, but **input
+inversions are not**: a cut maps to a single cell only when that cell natively realizes the needed
+inversions (e.g. a built-in inverted pin as in `INR4`/`AND4B1`). Otherwise the tool inserts real,
+counted `INV` cells. To get a single-cell mapping for an inverted-input function, the library must
+contain a cell with that inversion built in.
 
 ---
 
@@ -201,7 +207,7 @@ function = "!((a & b) | c)"
 ### 5.2 Key design decisions
 
 1. **`function` reuses the DSL expression syntax** — single parser handles both
-2. **No variant enumeration needed** — NPN matching covers input inversions/permutations automatically; only base form is written in the library
+2. **No permutation variants needed** — NPN matching covers input **permutations** automatically, so only one pin ordering is written in the library. Input **inversions are not free**, however: a cell only realizes inversions it bakes into its own `function` (see §6.4); added inversions cost real `INV` cells. To get single-cell mapping for an inverted-input function, include a cell with that inversion built in.
 3. **No area/delay fields** — cell-count optimization doesn't need them; reserved for future
 4. **k=6 input limit** — cells with >6 inputs cannot be matched (cut enumeration is bounded at k=6); loader emits a one-line informational note but loads the rest of the library
 
