@@ -20,7 +20,17 @@ pub struct Phase1Result {
 
 const INF: u32 = u32::MAX / 4;
 
-pub fn run(aig: &Aig, cuts: &[Vec<Cut>], idx: &NpnLibIndex) -> Phase1Result {
+fn inv_mapping_sentinel() -> InputMapping {
+    InputMapping {
+        cell_id: crate::frontend::library::CellId(u32::MAX),
+        n_inputs: 0,
+        pin_perm: [0; 6],
+        input_negation: 0,
+        output_negation: false,
+    }
+}
+
+pub fn run(aig: &Aig, cuts: &[Vec<Cut>], idx: &NpnLibIndex, has_inv: bool) -> Phase1Result {
     let n = aig.num_nodes();
     let mut best_pos: Vec<Option<BestChoice>> = vec![None; n];
     let mut best_neg: Vec<Option<BestChoice>> = vec![None; n];
@@ -36,7 +46,17 @@ pub fn run(aig: &Aig, cuts: &[Vec<Cut>], idx: &NpnLibIndex) -> Phase1Result {
             }
             NodeKind::PrimaryInput { .. } => {
                 cost_pos[idx_n] = 0;
-                cost_neg[idx_n] = 0;
+                // A complemented primary input must be produced by a real INV cell.
+                if has_inv {
+                    cost_neg[idx_n] = 1;
+                    best_neg[idx_n] = Some(BestChoice {
+                        cost: 1,
+                        cut_index: usize::MAX,
+                        mapping: inv_mapping_sentinel(),
+                        via_inv: true,
+                    });
+                }
+                // else: cost_neg stays INF, best_neg stays None (complement infeasible)
                 continue;
             }
             NodeKind::And2 { .. } => {}
@@ -91,21 +111,15 @@ pub fn run(aig: &Aig, cuts: &[Vec<Cut>], idx: &NpnLibIndex) -> Phase1Result {
             }
         }
 
-        // Consider "compute positive + INV" route for negative.
-        if cost_pos[idx_n] < INF {
+        // Consider "compute positive + INV" route for negative — only if an INV cell exists.
+        if has_inv && cost_pos[idx_n] < INF {
             let inv_cost = cost_pos[idx_n].saturating_add(1);
             if inv_cost < cost_neg[idx_n] {
                 cost_neg[idx_n] = inv_cost;
                 best_neg[idx_n] = Some(BestChoice {
                     cost: inv_cost,
                     cut_index: usize::MAX,
-                    mapping: InputMapping {
-                        cell_id: crate::frontend::library::CellId(u32::MAX),
-                        n_inputs: 0,
-                        pin_perm: [0; 6],
-                        input_negation: 0,
-                        output_negation: false,
-                    },
+                    mapping: inv_mapping_sentinel(),
                     via_inv: true,
                 });
             }
@@ -146,7 +160,7 @@ mod tests {
         let cuts = enumerate_cuts(&aig);
         let lib = make_nand2_lib();
         let idx = NpnLibIndex::build(&lib);
-        let res = run(&aig, &cuts, &idx);
+        let res = run(&aig, &cuts, &idx, false);
         let neg_choice = res.best_neg[ab.node.0 as usize]
             .as_ref()
             .expect("must have neg choice");

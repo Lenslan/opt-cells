@@ -25,28 +25,37 @@ pub fn run(
     let mut uid_counter: u32 = 0;
     let mut cells: Vec<CellInstance> = Vec::new();
 
-    while let Some((node, neg_polarity)) = queue.pop_front() {
-        if required.contains_key(&(node, neg_polarity)) {
+    while let Some((node, neg)) = queue.pop_front() {
+        if required.contains_key(&(node, neg)) {
             continue;
         }
 
-        // PIs / Const0: wires only.
-        if matches!(
-            aig.node(node).kind,
-            NodeKind::Const0 | NodeKind::PrimaryInput { .. }
-        ) {
-            required.insert((node, neg_polarity), None);
-            continue;
+        match aig.node(node).kind {
+            // Constants are free wires in both polarities (opposite power rail, no cell).
+            NodeKind::Const0 => {
+                required.insert((node, neg), None);
+                continue;
+            }
+            NodeKind::PrimaryInput { .. } => {
+                if !neg {
+                    // Positive primary input: external wire, no cell.
+                    required.insert((node, false), None);
+                    continue;
+                }
+                // Negated primary input: fall through to best_neg (a real INV cell).
+            }
+            NodeKind::And2 { .. } => {}
         }
 
-        let choice_opt = if neg_polarity {
+        let choice = if neg {
             p1.best_neg[node.0 as usize].as_ref()
         } else {
             p1.best_pos[node.0 as usize].as_ref()
-        };
-        let choice = choice_opt.ok_or_else(|| OptCellsError::Mapping {
+        }
+        .ok_or_else(|| OptCellsError::Mapping {
             message: format!(
-                "no library cell can implement function at AIG node {}",
+                "cannot implement {} polarity of AIG node {}: no matching cell and no inverter available",
+                if neg { "negative" } else { "positive" },
                 node.0
             ),
         })?;
@@ -54,7 +63,7 @@ pub fn run(
         if choice.via_inv {
             let inv_id = inv_cell_id.ok_or_else(|| OptCellsError::Mapping {
                 message: format!(
-                    "node {} requires inversion but library has no INV-class cell",
+                    "AIG node {} requires inversion but library has no INV-class cell",
                     node.0
                 ),
             })?;
@@ -64,13 +73,13 @@ pub fn run(
                 uid,
                 cell_id: CellId(inv_id),
                 aig_node: node,
+                output_negated: true,
                 pin_inputs: vec![PinInput {
                     leaf: node,
-                    invert: false,
+                    leaf_negated: false,
                 }],
-                produces_negation: true,
             });
-            required.insert((node, neg_polarity), Some(uid));
+            required.insert((node, neg), Some(uid));
             queue.push_back((node, false));
         } else {
             let cut = &cuts[node.0 as usize][choice.cut_index];
@@ -80,26 +89,26 @@ pub fn run(
             let mut pin_inputs: Vec<PinInput> = vec![
                 PinInput {
                     leaf: NodeId(0),
-                    invert: false
+                    leaf_negated: false
                 };
                 n_inputs
             ];
             for (leaf_pos, &leaf) in cut.leaves.iter().enumerate() {
                 let pin = choice.mapping.pin_perm[leaf_pos] as usize;
-                let invert = (choice.mapping.input_negation >> leaf_pos) & 1 == 1;
-                pin_inputs[pin] = PinInput { leaf, invert };
+                let leaf_negated = (choice.mapping.input_negation >> leaf_pos) & 1 == 1;
+                pin_inputs[pin] = PinInput { leaf, leaf_negated };
             }
             cells.push(CellInstance {
                 uid,
                 cell_id: choice.mapping.cell_id,
                 aig_node: node,
+                output_negated: neg,
                 pin_inputs,
-                produces_negation: choice.mapping.output_negation,
             });
-            required.insert((node, neg_polarity), Some(uid));
+            required.insert((node, neg), Some(uid));
             for (leaf_pos, &leaf) in cut.leaves.iter().enumerate() {
-                let neg = (choice.mapping.input_negation >> leaf_pos) & 1 == 1;
-                queue.push_back((leaf, neg));
+                let leaf_negated = (choice.mapping.input_negation >> leaf_pos) & 1 == 1;
+                queue.push_back((leaf, leaf_negated));
             }
         }
     }
@@ -118,7 +127,7 @@ pub fn run(
     })
 }
 
-fn find_inv_cell(lib: &CellLib) -> Option<u32> {
+pub fn find_inv_cell(lib: &CellLib) -> Option<u32> {
     lib.cells
         .iter()
         .find(|c| c.n_inputs == 1 && c.tt.0 == 0x1)
@@ -168,7 +177,7 @@ mod tests {
         let cuts = enumerate_cuts(&aig);
         let lib = nand2_lib();
         let idx = NpnLibIndex::build(&lib);
-        let p1 = phase1::run(&aig, &cuts, &idx);
+        let p1 = phase1::run(&aig, &cuts, &idx, true);
         let nl = run(&aig, &cuts, &lib, &p1).unwrap();
         assert_eq!(nl.total_cells, 1);
         assert_eq!(nl.cells[0].cell_id, CellId(1));

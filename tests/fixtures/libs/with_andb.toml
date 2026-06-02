@@ -1,0 +1,11 @@
+[[cell]]
+name = "INV"
+inputs = ["a"]
+output = "y"
+function = "!a"
+
+[[cell]]
+name = "AND2B1"
+inputs = ["a", "b"]
+output = "y"
+function = "!a & b"

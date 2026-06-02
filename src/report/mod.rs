@@ -33,63 +33,42 @@ pub fn render(r: &ReportInput) -> String {
     out.push_str(&sep);
     out.push('\n');
 
-    // Resolve PO names per AIG node.
-    let mut po_at: HashMap<NodeId, Vec<(String, bool)>> = HashMap::new();
+    // Primary outputs keyed by the (node, polarity) signal they consume.
+    let mut po_at: HashMap<(NodeId, bool), Vec<String>> = HashMap::new();
     for (name, node, invert) in &r.netlist.outputs {
         let label = r
             .display_names
             .get(name)
             .cloned()
             .unwrap_or_else(|| name.clone());
-        po_at.entry(*node).or_default().push((label, *invert));
+        po_at.entry((*node, *invert)).or_default().push(label);
     }
 
-    // Resolve cell uid driving each node for output expression.
-    // NOTE: when an INV is inserted at the same aig_node as the positive-form cell,
-    // both share aig_node; insertion order means later insert wins. For our purpose
-    // (rendering "leaf labels"), we want to point at the positive-form cell since
-    // it's the producer of the AIG node's actual value. The phase 2 algorithm pushes
-    // the INV cell before the positive form, so the positive form overwrites — which
-    // is the behavior we want.
-    let mut node_to_uid: HashMap<NodeId, u32> = HashMap::new();
+    // Each produced signal (node, polarity) -> the uid of the cell that drives it.
+    let mut signal_uid: HashMap<(NodeId, bool), u32> = HashMap::new();
     for c in &r.netlist.cells {
-        node_to_uid.insert(c.aig_node, c.uid);
+        signal_uid.insert((c.aig_node, c.output_negated), c.uid);
     }
 
     for c in &r.netlist.cells {
         let cell = r.lib.cells.iter().find(|x| x.id == c.cell_id);
         let cell_name = cell.map(|x| x.name.as_str()).unwrap_or("???");
-        // Build "(pinName=leafExpr, ...)"
-        let mut pin_str = String::new();
-        pin_str.push('(');
+        let mut pin_str = String::from("(");
         if let Some(cell) = cell {
             for (i, pi) in c.pin_inputs.iter().enumerate() {
                 if i > 0 {
                     pin_str.push_str(", ");
                 }
                 let pin_name = cell.inputs.get(i).map(|s| s.as_str()).unwrap_or("?");
-                let leaf_label = leaf_label(r, pi.leaf, &node_to_uid);
-                if pi.invert {
-                    pin_str.push_str(&format!("{}=!{}", pin_name, leaf_label));
-                } else {
-                    pin_str.push_str(&format!("{}={}", pin_name, leaf_label));
-                }
+                let label = leaf_label(r, pi.leaf, pi.leaf_negated, &signal_uid);
+                pin_str.push_str(&format!("{}={}", pin_name, label));
             }
         }
         pin_str.push(')');
-        // Determine output target: PO name if this node drives one; else internal uX.
-        let out_label = if let Some(pos) = po_at.get(&c.aig_node) {
-            pos.iter()
-                .map(|(n, inv)| {
-                    let phys_inv = *inv ^ c.produces_negation;
-                    if phys_inv {
-                        format!("!{}", n)
-                    } else {
-                        n.clone()
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
+        // A cell drives the (aig_node, output_negated) signal; if a PO consumes exactly
+        // that signal, name it after the PO, otherwise after the internal node.
+        let out_label = if let Some(names) = po_at.get(&(c.aig_node, c.output_negated)) {
+            names.join(", ")
         } else {
             format!("n{}", c.aig_node.0)
         };
@@ -120,21 +99,38 @@ pub fn render(r: &ReportInput) -> String {
     out
 }
 
-fn leaf_label(r: &ReportInput, leaf: NodeId, node_to_uid: &HashMap<NodeId, u32>) -> String {
+fn leaf_label(
+    r: &ReportInput,
+    leaf: NodeId,
+    leaf_negated: bool,
+    signal_uid: &HashMap<(NodeId, bool), u32>,
+) -> String {
     match &r.aig.node(leaf).kind {
-        NodeKind::Const0 => "0".to_string(),
-        NodeKind::PrimaryInput { name } => r
-            .display_names
-            .get(name)
-            .cloned()
-            .unwrap_or_else(|| name.clone()),
-        NodeKind::And2 { .. } => {
-            if let Some(uid) = node_to_uid.get(&leaf) {
-                format!("n{}_u{}", leaf.0, uid)
+        NodeKind::Const0 => {
+            if leaf_negated {
+                "1".to_string()
             } else {
-                format!("n{}", leaf.0)
+                "0".to_string()
             }
         }
+        NodeKind::PrimaryInput { name } => {
+            if !leaf_negated {
+                r.display_names
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| name.clone())
+            } else {
+                // A complemented primary input is driven by a real INV cell.
+                match signal_uid.get(&(leaf, true)) {
+                    Some(uid) => format!("n{}_u{}", leaf.0, uid),
+                    None => format!("n{}", leaf.0),
+                }
+            }
+        }
+        NodeKind::And2 { .. } => match signal_uid.get(&(leaf, leaf_negated)) {
+            Some(uid) => format!("n{}_u{}", leaf.0, uid),
+            None => format!("n{}", leaf.0),
+        },
     }
 }
 
@@ -172,14 +168,14 @@ mod tests {
                 pin_inputs: vec![
                     PinInput {
                         leaf: a.node,
-                        invert: false,
+                        leaf_negated: false,
                     },
                     PinInput {
                         leaf: b.node,
-                        invert: false,
+                        leaf_negated: false,
                     },
                 ],
-                produces_negation: true,
+                output_negated: true,
             }],
             outputs: vec![("y".into(), ab.node, true)],
             total_cells: 1,
