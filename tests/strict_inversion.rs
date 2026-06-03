@@ -85,6 +85,31 @@ fn builtin_inverted_input_is_free() {
 }
 
 #[test]
+fn state_variants_use_builtin_inverted_pins_without_extra_inverters() {
+    for input in [
+        "inputs/STATE_1.dsl",
+        "inputs/STATE_2.dsl",
+        "inputs/STATE_3.dsl",
+    ] {
+        let s = run(input, "libs/state_test.toml");
+        assert!(
+            s.contains("Total cells used : 2"),
+            "{} should map to AN3 + INR4 only:\n{}",
+            input,
+            s
+        );
+        assert!(s.contains("AN3D0BWP7T40P140"), "{}", s);
+        assert!(s.contains("INR4D0BWP7T40P140"), "{}", s);
+        assert!(
+            !s.contains(" : INV"),
+            "{} should not need extra input inverters:\n{}",
+            input,
+            s
+        );
+    }
+}
+
+#[test]
 fn no_inv_cell_and_inversion_needed_is_an_error() {
     let manifest = env!("CARGO_MANIFEST_DIR");
     let input_text =

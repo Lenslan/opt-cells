@@ -93,6 +93,10 @@ impl Aig {
         self.outputs.push((name.into(), e));
     }
 
+    pub fn set_output_edge(&mut self, index: usize, e: Edge) {
+        self.outputs[index].1 = e;
+    }
+
     pub fn nodes(&self) -> &[AigNode] {
         &self.nodes
     }

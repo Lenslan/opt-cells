@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::frontend::library::{CellId, CellLib};
-use crate::match_npn::canonical::npn_canonical;
+use crate::match_npn::canonical::{npn_canonical, transforms_to_canonical};
 
 #[derive(Debug, Clone, Copy)]
 pub struct InputMapping {
@@ -30,20 +30,32 @@ impl NpnLibIndex {
                 continue;
             }
             let info = npn_canonical(cell.tt.0, cell.n_inputs);
-            let mut pin_perm = [0u8; 6];
-            pin_perm[..cell.n_inputs as usize]
-                .copy_from_slice(&info.input_perm[..cell.n_inputs as usize]);
-            let mapping = InputMapping {
-                cell_id: cell.id,
-                n_inputs: cell.n_inputs as u8,
-                pin_perm,
-                input_negation: info.input_negation,
-                output_negation: info.output_negation,
-            };
-            idx.index
+            let entry = idx
+                .index
                 .entry((info.canonical_tt, cell.n_inputs))
-                .or_default()
-                .push(mapping);
+                .or_default();
+            let mut seen = HashSet::new();
+            for transform in transforms_to_canonical(cell.tt.0, cell.n_inputs, info.canonical_tt) {
+                let mut pin_perm = [0u8; 6];
+                pin_perm[..cell.n_inputs as usize]
+                    .copy_from_slice(&transform.input_perm[..cell.n_inputs as usize]);
+                let mapping = InputMapping {
+                    cell_id: cell.id,
+                    n_inputs: cell.n_inputs as u8,
+                    pin_perm,
+                    input_negation: transform.input_negation,
+                    output_negation: transform.output_negation,
+                };
+                if seen.insert((
+                    mapping.cell_id,
+                    mapping.n_inputs,
+                    mapping.pin_perm,
+                    mapping.input_negation,
+                    mapping.output_negation,
+                )) {
+                    entry.push(mapping);
+                }
+            }
         }
         idx
     }
@@ -55,6 +67,7 @@ impl NpnLibIndex {
             None => return Vec::new(),
         };
         let mut out = Vec::new();
+        let mut seen = HashSet::new();
         for stored_map in stored {
             // Composition reasoning:
             //   canonical position i := cell_pin stored_map.pin_perm[i], possibly negated by stored_map.input_negation bit i.
@@ -80,13 +93,22 @@ impl NpnLibIndex {
             for (cell_pin, &leaf) in pin_to_leaf.iter().enumerate().take(k as usize) {
                 leaf_to_pin[leaf as usize] = cell_pin as u8;
             }
-            out.push(InputMapping {
+            let mapping = InputMapping {
                 cell_id: stored_map.cell_id,
                 n_inputs: stored_map.n_inputs,
                 pin_perm: leaf_to_pin,
                 input_negation: leaf_neg,
                 output_negation: stored_map.output_negation ^ cut_info.output_negation,
-            });
+            };
+            if seen.insert((
+                mapping.cell_id,
+                mapping.n_inputs,
+                mapping.pin_perm,
+                mapping.input_negation,
+                mapping.output_negation,
+            )) {
+                out.push(mapping);
+            }
         }
         out
     }
@@ -118,10 +140,12 @@ mod tests {
         };
         let idx = NpnLibIndex::build(&lib);
         let matches = idx.matches(0x7, 2);
-        assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].cell_id, CellId(0));
-        assert!(!matches[0].output_negation);
-        assert_eq!(matches[0].input_negation, 0);
+        assert!(
+            matches
+                .iter()
+                .any(|m| { m.cell_id == CellId(0) && !m.output_negation && m.input_negation == 0 }),
+            "NAND2 should match NAND cut without added input inversion; matches={matches:?}"
+        );
     }
 
     #[test]
@@ -142,6 +166,28 @@ mod tests {
         assert!(!m.output_negation, "no output flip needed");
         // exactly one input must be inverted
         assert_eq!(m.input_negation.count_ones(), 1);
+    }
+
+    #[test]
+    fn asymmetric_inverted_pin_cell_can_absorb_input_polarity_by_pin_swap() {
+        // INR4 = p0 & !p1 & !p2 & !p3.
+        let lib = CellLib {
+            cells: vec![cell(0, "INR4", 4, 0x0002)],
+            notes: vec![],
+        };
+        let idx = NpnLibIndex::build(&lib);
+        // Cut function: !a & b & !c & !d.  Leaf order is a,b,c,d, so the
+        // single true minterm is 0010b = bit 2.
+        let matches = idx.matches(0x0004, 4);
+        assert!(
+            matches.iter().any(|m| {
+                m.cell_id == CellId(0)
+                    && m.pin_perm[..4] == [1, 0, 2, 3]
+                    && m.input_negation == 0
+                    && !m.output_negation
+            }),
+            "expected INR4 to map a->negative pin B1 and b->positive pin A1 without external INV; matches={matches:?}"
+        );
     }
 
     #[test]

@@ -78,6 +78,35 @@ pub fn npn_canonical(tt: u64, k: u32) -> NpnInfo {
     }
 }
 
+pub fn transforms_to_canonical(tt: u64, k: u32, canonical_tt: u64) -> Vec<NpnInfo> {
+    assert!(k <= 6);
+    let mask = Tt64::mask(k);
+    let tt = tt & mask;
+    let canonical_tt = canonical_tt & mask;
+
+    let mut out = Vec::new();
+    let perms = permutations(k as usize);
+    for p in &perms {
+        let mut full_perm: [u8; 6] = [0; 6];
+        full_perm[..k as usize].copy_from_slice(p);
+        for in_neg in 0u8..(1 << k) {
+            for &out_neg in &[false, true] {
+                let candidate = apply_transform(tt, k, &full_perm, in_neg, out_neg) & mask;
+                if candidate == canonical_tt {
+                    out.push(NpnInfo {
+                        canonical_tt,
+                        k,
+                        input_perm: full_perm,
+                        input_negation: in_neg,
+                        output_negation: out_neg,
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
 fn permutations(k: usize) -> Vec<Vec<u8>> {
     let mut result = Vec::new();
     let mut current: Vec<u8> = (0..k as u8).collect();
