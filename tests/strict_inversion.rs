@@ -1,0 +1,101 @@
+mod common;
+
+use opt_cells::{run_pipeline, RunInputs};
+
+fn run(input_rel: &str, lib_rel: &str) -> String {
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let input_path = format!("tests/fixtures/{}", input_rel);
+    let library_path = format!("tests/fixtures/{}", lib_rel);
+    let input_text =
+        std::fs::read_to_string(format!("{}/tests/fixtures/{}", manifest, input_rel)).unwrap();
+    run_pipeline(RunInputs {
+        input_path,
+        input_text,
+        library_path,
+    })
+    .expect("pipeline ok")
+    .0
+}
+
+#[test]
+fn nand_uses_native_nand2_not_free_inverters() {
+    let s = run("inputs/nand.dsl", "libs/basic.toml");
+    assert!(
+        s.contains("NAND2"),
+        "should use the native NAND2 cell:\n{}",
+        s
+    );
+    assert!(
+        !s.contains("OR2"),
+        "must not emulate with OR2 + inverters:\n{}",
+        s
+    );
+    assert!(
+        !s.contains("=!"),
+        "no free pin inversion (pin=!signal) allowed:\n{}",
+        s
+    );
+    assert!(
+        s.contains("Total cells used : 1"),
+        "still a single cell:\n{}",
+        s
+    );
+}
+
+#[test]
+fn decode_counts_the_inverter() {
+    let s = run("inputs/decode.dsl", "libs/with_and4.toml");
+    assert!(
+        s.contains("Total cells used : 2"),
+        "AND4 + INV = 2 cells:\n{}",
+        s
+    );
+    assert!(s.contains("AND4"), "{}", s);
+    assert!(
+        s.contains("INV"),
+        "the state[3] inversion must be a real INV cell:\n{}",
+        s
+    );
+    assert!(!s.contains("=!"), "no free pin inversion:\n{}", s);
+}
+
+#[test]
+fn mux_counts_the_inverter() {
+    let s = run("inputs/mux.dsl", "libs/basic.toml");
+    assert!(
+        s.contains("Total cells used : 4"),
+        "adds a real INV for !s:\n{}",
+        s
+    );
+    assert!(s.contains("INV"), "{}", s);
+    assert!(!s.contains("=!"), "no free pin inversion:\n{}", s);
+}
+
+#[test]
+fn builtin_inverted_input_is_free() {
+    let s = run("inputs/andb.dsl", "libs/with_andb.toml");
+    assert!(s.contains("AND2B1"), "{}", s);
+    assert!(
+        s.contains("Total cells used : 1"),
+        "built-in inversion is free:\n{}",
+        s
+    );
+    assert!(!s.contains("INV"), "no separate inverter needed:\n{}", s);
+    assert!(!s.contains("=!"), "{}", s);
+}
+
+#[test]
+fn no_inv_cell_and_inversion_needed_is_an_error() {
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let input_text =
+        std::fs::read_to_string(format!("{}/tests/fixtures/inputs/nand.dsl", manifest)).unwrap();
+    let res = run_pipeline(RunInputs {
+        input_path: "tests/fixtures/inputs/nand.dsl".to_string(),
+        input_text,
+        library_path: "tests/fixtures/libs/no_inv.toml".to_string(),
+    });
+    assert!(
+        res.is_err(),
+        "missing INV + required inversion should be a mapping error"
+    );
+}

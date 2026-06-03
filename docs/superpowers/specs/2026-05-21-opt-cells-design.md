@@ -15,9 +15,15 @@ It is positioned as an **industrial-grade synthesizer subset** — meaningfully 
 ### 1.1 Motivating examples
 
 - Input `y = !(a & b);` with a library containing `NAND2` should yield a 1-cell mapping (one `NAND2`), not 2 cells (`AND2` + `INV`).
-- Input `decoded = (state[3:0] == 4'b0111);` with a library containing `AND4` should yield a 1-cell mapping (one `AND4` with the highest-bit input inverted), not 4+ cells.
+- Input `decoded = (state[3:0] == 4'b0111);` with a library containing `AND4` + `INV` should yield a
+  compact **2-cell** mapping (one `AND4` plus one `INV` on the inverted high bit), not 4+ cells — or a
+  single cell if the library supplies a native inverted-input variant such as `AND4B1`.
 
-The user does **not** need to enumerate input-inversion variants of cells in the library — NPN-equivalence matching handles that automatically.
+Cells are used exactly as the library defines them. Input **permutation** is free, but **input
+inversions are not**: a cut maps to a single cell only when that cell natively realizes the needed
+inversions (e.g. a built-in inverted pin as in `INR4`/`AND4B1`). Otherwise the tool inserts real,
+counted `INV` cells. To get a single-cell mapping for an inverted-input function, the library must
+contain a cell with that inversion built in.
 
 ---
 
@@ -201,7 +207,7 @@ function = "!((a & b) | c)"
 ### 5.2 Key design decisions
 
 1. **`function` reuses the DSL expression syntax** — single parser handles both
-2. **No variant enumeration needed** — NPN matching covers input inversions/permutations automatically; only base form is written in the library
+2. **No permutation variants needed** — NPN matching covers input **permutations** automatically, so only one pin ordering is written in the library. Input **inversions are not free**, however: a cell only realizes inversions it bakes into its own `function` (see §6.4); added inversions cost real `INV` cells. To get single-cell mapping for an inverted-input function, include a cell with that inversion built in.
 3. **No area/delay fields** — cell-count optimization doesn't need them; reserved for future
 4. **k=6 input limit** — cells with >6 inputs cannot be matched (cut enumeration is bounded at k=6); loader emits a one-line informational note but loads the rest of the library
 
@@ -290,11 +296,22 @@ Strict optimum (min cell count with DAG sharing) is NP-hard. Use the standard tw
 
 #### Cost model assumption (important)
 
-**Input pin inversion is free.** When NPN matching says a cell can implement a cut with one or more of its cut-leaves arriving inverted, we treat that as a single-cell mapping — the report shows the inversion as `pin=!signal` annotation, and no separate INV cell is counted.
+**Input pin inversion is NOT free.** Two kinds of inversion are treated differently:
 
-Rationale: real standard-cell libraries typically supply cells with built-in inverted input pins. Concrete example — TSMC's `INR4D0BWP7T40P140` has native function `out = !(!A1 | B1 | B2 | B3)`, where the inversion on pin `A1` is part of the cell's physical definition. So a logic like `!s3 & s2 & s1 & s0` maps to exactly one such cell, without any external inverter. The user is responsible for populating their library with the variants they want available (the tool does not invent cells); NPN matching only finds equivalence between user-provided cells and the target cut.
+- **Built-in inversions** baked into a cell's own `function` (e.g. TSMC `INR4D0BWP7T40P140`'s
+  `out = !(!A1 | B1 | B2 | B3)`, where `A1` is inverted inside the cell) are part of the cell's
+  truth table and are matched via input **permutation**. They cost nothing extra — the cell
+  physically realizes them.
+- **Added inversions** — feeding the complement of a signal into a pin the cell does not natively
+  invert — must be realized by a real, counted `INV` cell (or by a different cell that natively
+  produces the complemented function, e.g. a `NAND` for `!(a&b)`). A complemented primary input
+  costs an `INV`. If an inversion is required and the library has no `INV` cell (and no
+  native-complement cell), the mapping is infeasible and the tool reports an error.
 
-INV cells are counted only when explicit polarity reconciliation is needed at a primary output (or at a fanout point where two parent cuts need opposite polarities and no cheaper option exists).
+NPN matching still enumerates which leaves a given cell would need complemented; the cost model
+charges each such complement as a real inverter, so the DP prefers the cell that needs the fewest
+added inverters (it picks `NAND2` over `OR2` + 2×`INV`, and `INR4` over `AND4` + 3×`INV`).
+Inverters are shared across fanout via the per-`(node, polarity)` commit set.
 
 #### Phase 1 — bottom-up estimation
 
@@ -383,22 +400,32 @@ Three sections: summary, mapped netlist, cell usage.
 ═══════════════════════════════════════════════════════════════
   Input file       : examples/decode.dsl
   Cell library     : libs/basic.toml
-  Total cells used : 1
+  Total cells used : 2
 ───────────────────────────────────────────────────────────────
   Mapped netlist
 ───────────────────────────────────────────────────────────────
-  u0 : AND4  (a=!state[3], b=state[2], c=state[1], d=state[0])  -> decoded
+  u0 : INV   (a=state[3])                              -> n0
+  u1 : AND4  (a=n0, b=state[2], c=state[1], d=state[0])  -> decoded
 
 ───────────────────────────────────────────────────────────────
   Cell usage
 ───────────────────────────────────────────────────────────────
   AND4 × 1
+  INV  × 1
 ═══════════════════════════════════════════════════════════════
 ```
 
+The complemented high bit `state[3]` is realized by a separate, counted `INV` cell (`u0`)
+feeding the `AND4` — `AND4` has no native inverted pin, so the inversion is not free. A library
+that included a native-inverted-input cell (e.g. `AND4B1`) would map `decode` to a single cell.
+
 ### 7.3 Formatting rules
 
-- Input inversion shown inline as `pin=!signal` (cell absorbs the inversion — see §6.4 cost-model assumption; no extra INV cell is counted)
+- Input pins render as the driver's signal name (a primary-input name or a producing cell's `uX`
+  output); a `!` is never printed on an input pin. An added inversion appears as its own `INV`
+  cell line (`uX : INV (a=...) -> ...`) and is included in the "Cell usage" tally. Cells with
+  built-in inverted inputs (e.g. `AND2B1`, `INR`-style) absorb their inversion into the cell and
+  add no `INV`.
 - Vector signals restored from internal `state__3` back to `state[3]` for display (frontend maintains the original-name mapping)
 - Intermediate nodes named `u0, u1, u2, ...` in topological order
 - Multi-cell example:

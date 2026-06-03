@@ -3,14 +3,16 @@
 ═══════════════════════════════════════════════════════════════
   Input file       : tests/fixtures/inputs/decode.dsl
   Cell library     : tests/fixtures/libs/with_and4.toml
-  Total cells used : 1
+  Total cells used : 2
 ───────────────────────────────────────────────────────────────
   Mapped netlist
 ───────────────────────────────────────────────────────────────
-  u0 : AND4  (a=state[0], b=state[1], c=state[2], d=!state[3])  -> decoded
+  u0 : AND4  (a=state[0], b=state[1], c=state[2], d=n4_u1)  -> decoded
+  u1 : INV  (a=state[3])  -> n4
 
 ───────────────────────────────────────────────────────────────
   Cell usage
 ───────────────────────────────────────────────────────────────
   AND4 × 1
+  INV × 1
 ═══════════════════════════════════════════════════════════════
