@@ -1,0 +1,17 @@
+[[cell]]
+name = "INV"
+inputs = ["a"]
+output = "y"
+function = "!a"
+
+[[cell]]
+name = "INR4D0BWP7T40P140"
+inputs = ["A1", "B1", "B2", "B3"]
+output = "ZN"
+function = "!(!A1 | B1 | B2 | B3)"
+
+[[cell]]
+name = "AN3D0BWP7T40P140"
+inputs = ["A1", "A2", "A3"]
+output = "Z"
+function = "A1 & A2 & A3"
