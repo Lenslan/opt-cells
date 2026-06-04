@@ -1,0 +1,242 @@
+[[cell]]
+name = "INVD0BWP7T40P140"
+inputs = ["I"]
+output = "ZN"
+function = "!I"
+
+# AN2/3/4
+[[cell]]
+name = "AN2D0BWP7T40P140"
+inputs = ["A1", "A2"]
+output = "Z"
+function = "A1 & A2"
+
+[[cell]]
+name = "AN3D0BWP7T40P140"
+inputs = ["A1", "A2", "A3"]
+output = "Z"
+function = "A1 & A2 & A3"
+
+[[cell]]
+name = "AN4D0BWP7T40P140"
+inputs = ["A1", "A2", "A3", "A4"]
+output = "Z"
+function = "A1 & A2 & A3 & A4"
+
+# [[cell]]
+# name = "AO21D0BWP7T40P140"
+# inputs = ["A1", "A2", "B"]
+# output = "Z"
+# function = "(A1 & A2) | B"
+
+# PAGE 64
+# [[cell]]
+# name = "AO221D0BWP7T40P140"
+# inputs = ["A1", "A2", "B1", "B2", "C"]
+# output = "Z"
+# function = "(A1 & A2) | (B1 & B2) | C"
+
+# [[cell]]
+# name = "AO22D0BWP7T40P140"
+# inputs = ["A1", "A2", "B1", "B2"]
+# output = "Z"
+# function = "(A1 & A2) | (B1 & B2)"
+
+# [[cell]]
+# name = "AO31D0BWP7T40P140"
+# inputs = ["A1", "A2", "A3", "B"]
+# output = "Z"
+# function = "(A1 & A2 & A3) | B"
+
+# [[cell]]
+# name = "AOI221D0BWP7T40P140"
+# inputs = ["A1", "A2", "B", "C"]
+# output = "ZN"
+# function = "!((A1 & A2) | B | C)"
+
+# [[cell]]
+# name = "AOI21D0BWP7T40P140"
+# inputs = ["A1", "A2", "B"]
+# output = "ZN"
+# function = "!((A1 & A2) | B)"
+
+# [[cell]]
+# name = "AOI22D0BWP7T40P140"
+# inputs = ["A1", "A2", "B1", "B2"]
+# output = "ZN"
+# function = "!((A1 & A2) | (B1 & B2))"
+
+# OR2/3/4
+[[cell]]
+name = "OR2D0BWP7T40P140"
+inputs = ["A1", "A2"]
+output = "Z"
+function = "A1 | A2"
+
+[[cell]]
+name = "OR3D0BWP7T40P140"
+inputs = ["A1", "A2", "A3"]
+output = "Z"
+function = "A1 | A2 | A3"
+
+[[cell]]
+name = "OR4D0BWP7T40P140"
+inputs = ["A1", "A2", "A3", "A4"]
+output = "Z"
+function = "A1 | A2 | A3 | A4"
+
+# ND2/3/4
+[[cell]]
+name = "ND2D0BWP7T40P140"
+inputs = ["A1", "A2"]
+output = "ZN"
+function = "!(A1 & A2)"
+
+[[cell]]
+name = "ND3D0BWP7T40P140"
+inputs = ["A1", "A2", "A3"]
+output = "ZN"
+function = "!(A1 & A2 & A3)"
+
+[[cell]]
+name = "ND4D0BWP7T40P140"
+inputs = ["A1", "A2", "A3", "A4"]
+output = "ZN"
+function = "!(A1 & A2 & A3 & A4)"
+
+# NR2/3/4
+[[cell]]
+name = "NR2D0BWP7T40P140"
+inputs = ["A1", "A2"]
+output = "ZN"
+function = "!(A1 | A2)"
+
+[[cell]]
+name = "NR3D0BWP7T40P140"
+inputs = ["A1", "A2", "A3"]
+output = "ZN"
+function = "!(A1 | A2 | A3)"
+
+[[cell]]
+name = "NR4D0BWP7T40P140"
+inputs = ["A1", "A2", "A3", "A4"]
+output = "ZN"
+function = "!(A1 | A2 | A3 | A4)"
+
+# IND2/3/4
+[[cell]]
+name = "IND2D0BWP7T40P140"
+inputs = ["A1", "B1"]
+output = "ZN"
+function = "!(!A1 & B1)"
+
+[[cell]]
+name = "IND3D0BWP7T40P140"
+inputs = ["A1", "B1", "B2"]
+output = "ZN"
+function = "!(!A1 & B1 & B2)"
+
+[[cell]]
+name = "IND4D0BWP7T40P140"
+inputs = ["A1", "B1", "B2", "B3"]
+output = "ZN"
+function = "!(!A1 & B1 & B2 & B3)"
+
+# INR2/3/4
+[[cell]]
+name = "INR2D0BWP7T40P140"
+inputs = ["A1", "B1"]
+output = "ZN"
+function = "!(!A1 | B1)"
+
+[[cell]]
+name = "INR3D0BWP7T40P140"
+inputs = ["A1", "B1", "B2"]
+output = "ZN"
+function = "!(!A1 | B1 | B2)"
+
+[[cell]]
+name = "INR4D0BWP7T40P140"
+inputs = ["A1", "B1", "B2", "B3"]
+output = "ZN"
+function = "!(!A1 | B1 | B2 | B3)"
+
+# MUX
+[[cell]]
+name = "MUX2D0BWP7T40P140"
+inputs = ["I0", "I1", "S"]
+output = "Z"
+function = "(I1 & S) | (I0 & !S)"
+
+[[cell]]
+name = "MUX2ND0BWP7T40P140"
+inputs = ["I0", "I1", "S"]
+output = "ZN"
+function = "!((I1 & S) | (I0 & !S))"
+
+# [[cell]]
+# name = "OA211D0BWP7T40P140"
+# inputs = ["A1", "A2", "B", "C"]
+# output = "Z"
+# function = "(A1 | A2) & B & C"
+
+# [[cell]]
+# name = "OA21D0BWP7T40P140"
+# inputs = ["A1", "A2", "B"]
+# output = "Z"
+# function = "(A1 | A2) & B"
+
+# [[cell]]
+# name = "OA221D0BWP7T40P140"
+# inputs = ["A1", "A2", "B1", "B2", "C"]
+# output = "Z"
+# function = "(A1 | A2) & (B1 | B2) & C"
+
+# [[cell]]
+# name = "OA22D0BWP7T40P140"
+# inputs = ["A1", "A2", "B1", "B2"]
+# output = "Z"
+# function = "(A1 | A2) & (B1 | B2)"
+
+# [[cell]]
+# name = "OAI211D0BWP7T40P140"
+# inputs = ["A1", "A2", "B", "C"]
+# output = "ZN"
+# function = "!((A1 | A2) & B & C)"
+
+# [[cell]]
+# name = "OAI21D0BWP7T40P140"
+# inputs = ["A1", "A2", "B"]
+# output = "ZN"
+# function = "!((A1 | A2) & B)"
+
+# [[cell]]
+# name = "OAI221D0BWP7T40P140"
+# inputs = ["A1", "A2", "B1", "B2", "C"]
+# output = "ZN"
+# function = "!((A1 | A2) & (B1 | B2) & C)"
+
+# [[cell]]
+# name = "OAI22D0BWP7T40P140"
+# inputs = ["A1", "A2", "B1", "B2"]
+# output = "Z"
+# function = "!((A1 | A2) & (B1 | B2))"
+
+# XOR2/3/4
+[[cell]]
+name = "XOR2D0BWP7T40P140"
+inputs = ["A1", "A2"]
+output = "Z"
+function = "A1 ^ A2"
+
+[[cell]]
+name = "XOR3D0BWP7T40P140"
+inputs = ["A1", "A2", "A3"]
+output = "Z"
+function = "A1 ^ A2 ^ A3"
+
+[[cell]]
+name = "XOR4D0BWP7T40P140"
+inputs = ["A1", "A2", "A3", "A4"]
+output = "Z"
+function = "A1 ^ A2 ^ A3 ^ A4"
