@@ -89,6 +89,12 @@ pub enum Expr {
         rhs: Box<Expr>,
         span: Span,
     },
+    Mux {
+        sel: Box<Expr>,
+        if_true: Box<Expr>,
+        if_false: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,7 +119,8 @@ impl Expr {
             | Expr::Or { span, .. }
             | Expr::Xor { span, .. }
             | Expr::Eq { span, .. }
-            | Expr::Neq { span, .. } => *span,
+            | Expr::Neq { span, .. }
+            | Expr::Mux { span, .. } => *span,
         }
     }
 }

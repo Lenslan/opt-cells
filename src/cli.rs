@@ -11,7 +11,7 @@ pub struct Args {
     pub input: String,
 
     /// Cell library TOML file.
-    #[arg(short = 'l', long = "library", default_value="./lib/basic.toml")]
+    #[arg(short = 'l', long = "library", default_value = "./lib/basic.toml")]
     pub library: String,
 
     /// Write report to file (default: stdout).

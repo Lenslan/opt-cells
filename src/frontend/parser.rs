@@ -140,7 +140,29 @@ pub fn expr_parser<'src>(
             },
         );
 
-        or_expr.padded()
+        // conditional expression: cond ? if_true : if_false
+        // This is the lowest-precedence expression form and is right-associative
+        // because each branch is parsed as a full expression.
+        or_expr
+            .clone()
+            .then(
+                just('?')
+                    .padded()
+                    .ignore_then(expr.clone())
+                    .then_ignore(just(':').padded())
+                    .then(expr.clone())
+                    .or_not(),
+            )
+            .map_with(|(sel, arms), e| match arms {
+                Some((if_true, if_false)) => Expr::Mux {
+                    sel: Box::new(sel),
+                    if_true: Box::new(if_true),
+                    if_false: Box::new(if_false),
+                    span: to_span(e.span()),
+                },
+                None => sel,
+            })
+            .padded()
     })
 }
 
@@ -391,6 +413,34 @@ mod tests {
     fn equality_expression() {
         let e = parse("state == 4'b0111");
         assert!(matches!(e, Expr::Eq { .. }));
+    }
+
+    #[test]
+    fn conditional_expression() {
+        let e = parse("sel ? a : b");
+        if let Expr::Mux {
+            sel,
+            if_true,
+            if_false,
+            ..
+        } = e
+        {
+            assert!(matches!(*sel, Expr::Ref { ref name, .. } if name == "sel"));
+            assert!(matches!(*if_true, Expr::Ref { ref name, .. } if name == "a"));
+            assert!(matches!(*if_false, Expr::Ref { ref name, .. } if name == "b"));
+        } else {
+            panic!("not mux");
+        }
+    }
+
+    #[test]
+    fn conditional_has_lower_precedence_than_or() {
+        let e = parse("a | sel ? b : c");
+        if let Expr::Mux { sel, .. } = e {
+            assert!(matches!(*sel, Expr::Or { .. }));
+        } else {
+            panic!("not mux");
+        }
     }
 
     #[test]

@@ -12,6 +12,8 @@ pub struct ReportInput<'a> {
     pub library_path: &'a str,
     /// Internal-name -> display-name (e.g. "state__3" -> "state[3]").
     pub display_names: &'a HashMap<String, String>,
+    /// AIG signal `(node, polarity)` -> user-requested internal net label.
+    pub net_aliases: &'a HashMap<(NodeId, bool), String>,
 }
 
 pub fn render(r: &ReportInput) -> String {
@@ -67,7 +69,10 @@ pub fn render(r: &ReportInput) -> String {
         let out_label = if let Some(names) = po_at.get(&(c.aig_node, c.output_negated)) {
             names.join(", ")
         } else {
-            format!("n{}", c.aig_node.0)
+            r.net_aliases
+                .get(&(c.aig_node, c.output_negated))
+                .cloned()
+                .unwrap_or_else(|| format!("n{}", c.aig_node.0))
         };
         out.push_str(&format!(
             "  u{} : {}  {}  -> {}\n",
@@ -128,7 +133,7 @@ pub fn render_tcl(r: &ReportInput) -> String {
         push_tcl_line(
             &mut out,
             "create_net",
-            &internal_net_name(c.aig_node, c.uid),
+            &ctx.internal_net_name(c.aig_node, c.output_negated, c.uid),
             None,
         );
     }
@@ -229,6 +234,7 @@ impl<'ctx, 'data> TclContext<'ctx, 'data> {
             .get(&(node, negated))
             .and_then(|names| names.first())
             .cloned()
+            .or_else(|| self.alias_net_name(node, negated))
             .unwrap_or_else(|| internal_net_name(node, uid))
     }
 
@@ -237,10 +243,24 @@ impl<'ctx, 'data> TclContext<'ctx, 'data> {
             .get(&(node, negated))
             .and_then(|names| names.first())
             .cloned()
+            .or_else(|| self.alias_net_name(node, negated))
             .unwrap_or_else(|| match self.signal_uid.get(&(node, negated)) {
                 Some(uid) => internal_net_name(node, *uid),
                 None => format!("eco_n{}", node.0),
             })
+    }
+
+    fn internal_net_name(&self, node: NodeId, negated: bool, uid: u32) -> String {
+        self.alias_net_name(node, negated)
+            .unwrap_or_else(|| internal_net_name(node, uid))
+    }
+
+    fn alias_net_name(&self, node: NodeId, negated: bool) -> Option<String> {
+        match &self.report.aig.node(node).kind {
+            NodeKind::Const0 => None,
+            NodeKind::PrimaryInput { .. } if !negated => None,
+            _ => self.report.net_aliases.get(&(node, negated)).cloned(),
+        }
     }
 }
 
@@ -291,16 +311,23 @@ fn leaf_label(
                     .cloned()
                     .unwrap_or_else(|| name.clone())
             } else {
-                match signal_uid.get(&(leaf, true)) {
-                    Some(uid) => format!("n{}_u{}", leaf.0, uid),
-                    None => format!("n{}", leaf.0),
-                }
+                r.net_aliases
+                    .get(&(leaf, true))
+                    .cloned()
+                    .unwrap_or_else(|| match signal_uid.get(&(leaf, true)) {
+                        Some(uid) => format!("n{}_u{}", leaf.0, uid),
+                        None => format!("n{}", leaf.0),
+                    })
             }
         }
-        NodeKind::And2 { .. } => match signal_uid.get(&(leaf, leaf_negated)) {
-            Some(uid) => format!("n{}_u{}", leaf.0, uid),
-            None => format!("n{}", leaf.0),
-        },
+        NodeKind::And2 { .. } => r
+            .net_aliases
+            .get(&(leaf, leaf_negated))
+            .cloned()
+            .unwrap_or_else(|| match signal_uid.get(&(leaf, leaf_negated)) {
+                Some(uid) => format!("n{}_u{}", leaf.0, uid),
+                None => format!("n{}", leaf.0),
+            }),
     }
 }
 
@@ -351,6 +378,7 @@ mod tests {
             total_cells: 1,
         };
         let display: HashMap<String, String> = HashMap::new();
+        let aliases: HashMap<(NodeId, bool), String> = HashMap::new();
         let s = render(&ReportInput {
             aig: &aig,
             lib: &lib,
@@ -358,6 +386,7 @@ mod tests {
             input_path: "examples/nand.dsl",
             library_path: "libs/basic.toml",
             display_names: &display,
+            net_aliases: &aliases,
         });
         assert!(s.contains("Total cells used : 1"));
         assert!(s.contains("NAND2"));

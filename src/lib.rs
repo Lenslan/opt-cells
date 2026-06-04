@@ -37,6 +37,7 @@ pub fn run_pipeline(inputs: RunInputs) -> Result<(String, HashMap<String, String
         input_path: &inputs.input_path,
         library_path: &inputs.library_path,
         display_names: &elab.display_names,
+        net_aliases: &elab.net_aliases,
     });
     Ok((report_string, elab.display_names))
 }

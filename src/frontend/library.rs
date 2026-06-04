@@ -171,6 +171,19 @@ fn eval_expr_to_aig<'a>(
                 x.inv()
             })
         }
+        Mux {
+            sel,
+            if_true,
+            if_false,
+            ..
+        } => {
+            let s = eval_expr_to_aig(sel, aig, env, _inputs)?;
+            let t = eval_expr_to_aig(if_true, aig, env, _inputs)?;
+            let f = eval_expr_to_aig(if_false, aig, env, _inputs)?;
+            let true_path = aig.and(s, t);
+            let false_path = aig.and(s.inv(), f);
+            Ok(aig.or(true_path, false_path))
+        }
     }
 }
 

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::aig::{Aig, Edge};
+use crate::aig::{Aig, Edge, NodeId};
 use crate::error::{OptCellsError, Span};
 use crate::frontend::ast::{BitLiteral, BitSel, Decl, Expr, Program, Stmt, Width};
 
@@ -9,13 +9,17 @@ pub struct ElabResult {
     pub aig: Aig,
     /// internal-name -> human label for report display (e.g. "state__3" -> "state[3]")
     pub display_names: HashMap<String, String>,
+    /// AIG signal `(node, polarity)` -> user-requested net label for report/Tcl.
+    pub net_aliases: HashMap<(NodeId, bool), String>,
 }
 
 struct Elaborator {
     aig: Aig,
     decl_widths: HashMap<String, Width>,
     signals: HashMap<String, Edge>,
+    intermediates: HashSet<String>,
     display: HashMap<String, String>,
+    net_aliases: HashMap<(NodeId, bool), String>,
     source_name: String,
     source_text: String,
 }
@@ -146,12 +150,30 @@ impl Elaborator {
                 let r = self.build_expr(rhs)?;
                 Ok(self.aig.xor(l, r))
             }
+            Expr::Mux {
+                sel,
+                if_true,
+                if_false,
+                ..
+            } => {
+                let _ = self.expr_width(e)?;
+                let s = self.build_expr(sel)?;
+                let t = self.build_expr(if_true)?;
+                let f = self.build_expr(if_false)?;
+                Ok(self.build_mux(s, t, f))
+            }
             Expr::Eq { lhs, rhs, span } | Expr::Neq { lhs, rhs, span } => {
                 let neg = matches!(e, Expr::Neq { .. });
                 let edge = self.build_eq(lhs, rhs, *span)?;
                 Ok(if neg { edge.inv() } else { edge })
             }
         }
+    }
+
+    fn build_mux(&mut self, sel: Edge, if_true: Edge, if_false: Edge) -> Edge {
+        let true_path = self.aig.and(sel, if_true);
+        let false_path = self.aig.and(sel.inv(), if_false);
+        self.aig.or(true_path, false_path)
     }
 
     fn build_eq(&mut self, lhs: &Expr, rhs: &Expr, span: Span) -> Result<Edge, OptCellsError> {
@@ -221,6 +243,35 @@ impl Elaborator {
                     }
                 }
             }
+            Expr::Mux {
+                sel,
+                if_true,
+                if_false,
+                span,
+            } => {
+                let sw = self.expr_width(sel)?;
+                if sw != 1 {
+                    return Err(self.err(
+                        format!("mux selector must be 1 bit, got {} bits", sw),
+                        *span,
+                    ));
+                }
+                let tw = self.expr_width(if_true)?;
+                let fw = self.expr_width(if_false)?;
+                if tw != fw {
+                    return Err(self.err(
+                        format!("mux branch width mismatch: {} bits vs {} bits", tw, fw),
+                        *span,
+                    ));
+                }
+                if tw != 1 {
+                    return Err(self.err(
+                        "multi-bit mux expressions are not supported; assign one bit at a time",
+                        *span,
+                    ));
+                }
+                Ok(1)
+            }
             _ => Ok(1), // boolean ops always produce 1-bit result
         }
     }
@@ -287,14 +338,37 @@ impl Elaborator {
         }
     }
 
+    fn record_net_alias(&mut self, name: &str, edge: Edge) {
+        if name.starts_with("eco_") {
+            self.net_aliases
+                .insert((edge.node, edge.invert), name.to_string());
+        }
+    }
+
     fn assign_stmt(&mut self, s: &Stmt) -> Result<(), OptCellsError> {
         let rhs = self.build_expr(&s.rhs)?;
-        let target_w = self.decl_widths.get(&s.lhs.name).copied().ok_or_else(|| {
-            self.err(
-                format!("assignment to undeclared signal '{}'", s.lhs.name),
+        let Some(target_w) = self.decl_widths.get(&s.lhs.name).copied() else {
+            if s.lhs.index.is_some() {
+                return Err(self.err(
+                    format!("assignment to undeclared signal '{}'", s.lhs.name),
+                    s.lhs.span,
+                ));
+            }
+            self.decl_widths.insert(s.lhs.name.clone(), Width::Bit);
+            self.intermediates.insert(s.lhs.name.clone());
+            self.signals.insert(s.lhs.name.clone(), rhs);
+            self.record_net_alias(&s.lhs.name, rhs);
+            return Ok(());
+        };
+        if self.intermediates.contains(&s.lhs.name) {
+            return Err(self.err(
+                format!(
+                    "duplicate assignment to intermediate signal '{}'",
+                    s.lhs.name
+                ),
                 s.lhs.span,
-            )
-        })?;
+            ));
+        }
         match (target_w, s.lhs.index) {
             (Width::Bit, None) => {
                 self.signals.insert(s.lhs.name.clone(), rhs);
@@ -336,7 +410,9 @@ pub fn elaborate(
         aig: Aig::new(),
         decl_widths: HashMap::new(),
         signals: HashMap::new(),
+        intermediates: HashSet::new(),
         display: HashMap::new(),
+        net_aliases: HashMap::new(),
         source_name: source_name.into(),
         source_text: source_text.into(),
     };
@@ -352,6 +428,7 @@ pub fn elaborate(
     Ok(ElabResult {
         aig: el.aig,
         display_names: el.display,
+        net_aliases: el.net_aliases,
     })
 }
 
