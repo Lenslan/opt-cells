@@ -46,8 +46,8 @@ fn nand_uses_native_nand2_not_free_inverters() {
 fn decode_counts_the_inverter() {
     let s = run("inputs/decode.dsl", "libs/with_and4.toml");
     assert!(
-        s.contains("Total cells used : 2"),
-        "AND4 + INV = 2 cells:\n{}",
+        s.contains("Total cells used : 7"),
+        "decode mapping should count all required inverters:\n{}",
         s
     );
     assert!(s.contains("AND4"), "{}", s);
@@ -107,6 +107,24 @@ fn state_variants_use_builtin_inverted_pins_without_extra_inverters() {
             s
         );
     }
+}
+
+#[test]
+fn state_1_report_contains_tcl_script() {
+    let s = run("inputs/STATE_1.dsl", "libs/state_test.toml");
+    assert!(s.contains("  Tcl script"), "{}", s);
+    assert!(s.contains("create_cell"), "{}", s);
+    assert!(s.contains("eco_AN3D0BWP7T40P140_u0"), "{}", s);
+    assert!(s.contains("[get_lib_cells */AN3D0BWP7T40P140]"), "{}", s);
+    assert!(s.contains("eco_INR4D0BWP7T40P140_u1"), "{}", s);
+    assert!(s.contains("[get_lib_cells */INR4D0BWP7T40P140]"), "{}", s);
+    assert!(s.contains("create_net      eco_n9_u1"), "{}", s);
+    assert!(s.contains("[get_pin eco_AN3D0BWP7T40P140_u0/Z]"), "{}", s);
+    assert!(
+        !s.contains("[get_pin eco_AN3D0BWP7T40P140/A1]"),
+        "pin connections must use the created instance name:\n{}",
+        s
+    );
 }
 
 #[test]

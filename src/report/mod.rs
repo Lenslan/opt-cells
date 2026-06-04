@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::aig::{Aig, NodeId, NodeKind};
-use crate::frontend::library::CellLib;
+use crate::frontend::library::{CellDecl, CellId, CellLib};
 use crate::mapper::MappedNetlist;
 
 pub struct ReportInput<'a> {
@@ -16,8 +16,8 @@ pub struct ReportInput<'a> {
 
 pub fn render(r: &ReportInput) -> String {
     let mut out = String::new();
-    let hdr = "═".repeat(63);
-    let sep = "─".repeat(63);
+    let hdr = "=".repeat(63);
+    let sep = "-".repeat(63);
 
     out.push_str(&hdr);
     out.push('\n');
@@ -33,7 +33,6 @@ pub fn render(r: &ReportInput) -> String {
     out.push_str(&sep);
     out.push('\n');
 
-    // Primary outputs keyed by the (node, polarity) signal they consume.
     let mut po_at: HashMap<(NodeId, bool), Vec<String>> = HashMap::new();
     for (name, node, invert) in &r.netlist.outputs {
         let label = r
@@ -44,7 +43,6 @@ pub fn render(r: &ReportInput) -> String {
         po_at.entry((*node, *invert)).or_default().push(label);
     }
 
-    // Each produced signal (node, polarity) -> the uid of the cell that drives it.
     let mut signal_uid: HashMap<(NodeId, bool), u32> = HashMap::new();
     for c in &r.netlist.cells {
         signal_uid.insert((c.aig_node, c.output_negated), c.uid);
@@ -65,8 +63,7 @@ pub fn render(r: &ReportInput) -> String {
             }
         }
         pin_str.push(')');
-        // A cell drives the (aig_node, output_negated) signal; if a PO consumes exactly
-        // that signal, name it after the PO, otherwise after the internal node.
+
         let out_label = if let Some(names) = po_at.get(&(c.aig_node, c.output_negated)) {
             names.join(", ")
         } else {
@@ -77,12 +74,21 @@ pub fn render(r: &ReportInput) -> String {
             c.uid, cell_name, pin_str, out_label
         ));
     }
+
+    out.push('\n');
+    out.push_str(&sep);
+    out.push('\n');
+    out.push_str("  Tcl script\n");
+    out.push_str(&sep);
+    out.push('\n');
+    out.push_str(&render_tcl(r));
     out.push('\n');
     out.push_str(&sep);
     out.push('\n');
     out.push_str("  Cell usage\n");
     out.push_str(&sep);
     out.push('\n');
+
     let mut counts: HashMap<&str, u32> = HashMap::new();
     for c in &r.netlist.cells {
         let cell = r.lib.cells.iter().find(|x| x.id == c.cell_id);
@@ -92,11 +98,176 @@ pub fn render(r: &ReportInput) -> String {
     let mut counts_vec: Vec<_> = counts.into_iter().collect();
     counts_vec.sort_by_key(|(name, _)| *name);
     for (name, n) in counts_vec {
-        out.push_str(&format!("  {} × {}\n", name, n));
+        out.push_str(&format!("  {} x {}\n", name, n));
     }
     out.push_str(&hdr);
     out.push('\n');
     out
+}
+
+pub fn render_tcl(r: &ReportInput) -> String {
+    let mut out = String::new();
+    let ctx = TclContext::new(r);
+
+    for c in &r.netlist.cells {
+        let Some(cell) = ctx.cell_decl(c.cell_id) else {
+            continue;
+        };
+        push_tcl_line(
+            &mut out,
+            "create_cell",
+            &instance_name(&cell.name, c.uid),
+            Some(&format!("[get_lib_cells */{}]", cell.name)),
+        );
+    }
+
+    for c in &r.netlist.cells {
+        if ctx.is_primary_output_signal(c.aig_node, c.output_negated) {
+            continue;
+        }
+        push_tcl_line(
+            &mut out,
+            "create_net",
+            &internal_net_name(c.aig_node, c.uid),
+            None,
+        );
+    }
+
+    if !r.netlist.cells.is_empty() {
+        out.push('\n');
+    }
+
+    for c in &r.netlist.cells {
+        let Some(cell) = ctx.cell_decl(c.cell_id) else {
+            continue;
+        };
+        let inst_name = instance_name(&cell.name, c.uid);
+        for (i, pi) in c.pin_inputs.iter().enumerate() {
+            let Some(pin_name) = cell.inputs.get(i) else {
+                continue;
+            };
+            let net_name = ctx.source_net_name(pi.leaf, pi.leaf_negated);
+            push_tcl_line(
+                &mut out,
+                "connect_net",
+                &tcl_atom(&net_name),
+                Some(&format!("[get_pin {}/{}]", inst_name, pin_name)),
+            );
+        }
+
+        let out_net = ctx.driven_net_name(c.aig_node, c.output_negated, c.uid);
+        push_tcl_line(
+            &mut out,
+            "connect_net",
+            &tcl_atom(&out_net),
+            Some(&format!("[get_pin {}/{}]", inst_name, cell.output_pin)),
+        );
+    }
+
+    out
+}
+
+struct TclContext<'ctx, 'data> {
+    report: &'ctx ReportInput<'data>,
+    po_at: HashMap<(NodeId, bool), Vec<String>>,
+    signal_uid: HashMap<(NodeId, bool), u32>,
+}
+
+impl<'ctx, 'data> TclContext<'ctx, 'data> {
+    fn new(report: &'ctx ReportInput<'data>) -> Self {
+        let mut po_at: HashMap<(NodeId, bool), Vec<String>> = HashMap::new();
+        for (name, node, invert) in &report.netlist.outputs {
+            let label = report
+                .display_names
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| name.clone());
+            po_at.entry((*node, *invert)).or_default().push(label);
+        }
+
+        let mut signal_uid: HashMap<(NodeId, bool), u32> = HashMap::new();
+        for c in &report.netlist.cells {
+            signal_uid.insert((c.aig_node, c.output_negated), c.uid);
+        }
+
+        TclContext {
+            report,
+            po_at,
+            signal_uid,
+        }
+    }
+
+    fn cell_decl(&self, id: CellId) -> Option<&CellDecl> {
+        self.report.lib.cells.iter().find(|x| x.id == id)
+    }
+
+    fn is_primary_output_signal(&self, node: NodeId, negated: bool) -> bool {
+        self.po_at.contains_key(&(node, negated))
+    }
+
+    fn source_net_name(&self, node: NodeId, negated: bool) -> String {
+        match &self.report.aig.node(node).kind {
+            NodeKind::Const0 => {
+                if negated {
+                    "1".to_string()
+                } else {
+                    "0".to_string()
+                }
+            }
+            NodeKind::PrimaryInput { name } if !negated => self
+                .report
+                .display_names
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| name.clone()),
+            _ => self.driven_signal_net_name(node, negated),
+        }
+    }
+
+    fn driven_net_name(&self, node: NodeId, negated: bool, uid: u32) -> String {
+        self.po_at
+            .get(&(node, negated))
+            .and_then(|names| names.first())
+            .cloned()
+            .unwrap_or_else(|| internal_net_name(node, uid))
+    }
+
+    fn driven_signal_net_name(&self, node: NodeId, negated: bool) -> String {
+        self.po_at
+            .get(&(node, negated))
+            .and_then(|names| names.first())
+            .cloned()
+            .unwrap_or_else(|| match self.signal_uid.get(&(node, negated)) {
+                Some(uid) => internal_net_name(node, *uid),
+                None => format!("eco_n{}", node.0),
+            })
+    }
+}
+
+fn instance_name(cell_name: &str, uid: u32) -> String {
+    format!("eco_{}_u{}", cell_name, uid)
+}
+
+fn internal_net_name(node: NodeId, uid: u32) -> String {
+    format!("eco_n{}_u{}", node.0, uid)
+}
+
+fn push_tcl_line(out: &mut String, cmd: &str, arg: &str, tail: Option<&str>) {
+    match tail {
+        Some(tail) => out.push_str(&format!("{:<15} {:<38} {}\n", cmd, arg, tail)),
+        None => out.push_str(&format!("{:<15} {}\n", cmd, arg)),
+    }
+}
+
+fn tcl_atom(name: &str) -> String {
+    if name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | ':' | '.' | '/'))
+    {
+        name.to_string()
+    } else {
+        format!("{{{}}}", name.replace('\\', "\\\\").replace('}', "\\}"))
+    }
 }
 
 fn leaf_label(
@@ -120,7 +291,6 @@ fn leaf_label(
                     .cloned()
                     .unwrap_or_else(|| name.clone())
             } else {
-                // A complemented primary input is driven by a real INV cell.
                 match signal_uid.get(&(leaf, true)) {
                     Some(uid) => format!("n{}_u{}", leaf.0, uid),
                     None => format!("n{}", leaf.0),
@@ -192,6 +362,8 @@ mod tests {
         assert!(s.contains("Total cells used : 1"));
         assert!(s.contains("NAND2"));
         assert!(s.contains("(a=a, b=b)"));
-        assert!(s.contains("NAND2 × 1"));
+        assert!(s.contains("NAND2 x 1"));
+        assert!(s.contains("create_cell"));
+        assert!(s.contains("connect_net"));
     }
 }

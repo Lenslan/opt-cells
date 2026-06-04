@@ -1,21 +1,44 @@
-═══════════════════════════════════════════════════════════════
+===============================================================
   opt-cells mapping report
-═══════════════════════════════════════════════════════════════
+===============================================================
   Input file       : tests/fixtures/inputs/mux.dsl
   Cell library     : tests/fixtures/libs/basic.toml
   Total cells used : 4
-───────────────────────────────────────────────────────────────
+---------------------------------------------------------------
   Mapped netlist
-───────────────────────────────────────────────────────────────
+---------------------------------------------------------------
   u0 : OR2  (a=n4_u1, b=n5_u2)  -> y
   u1 : AND2  (a=s, b=b)  -> n4
   u2 : AND2  (a=n1_u3, b=a)  -> n5
   u3 : INV  (a=s)  -> n1
 
-───────────────────────────────────────────────────────────────
+---------------------------------------------------------------
+  Tcl script
+---------------------------------------------------------------
+create_cell     eco_OR2_u0                             [get_lib_cells */OR2]
+create_cell     eco_AND2_u1                            [get_lib_cells */AND2]
+create_cell     eco_AND2_u2                            [get_lib_cells */AND2]
+create_cell     eco_INV_u3                             [get_lib_cells */INV]
+create_net      eco_n4_u1
+create_net      eco_n5_u2
+create_net      eco_n1_u3
+
+connect_net     eco_n4_u1                              [get_pin eco_OR2_u0/a]
+connect_net     eco_n5_u2                              [get_pin eco_OR2_u0/b]
+connect_net     y                                      [get_pin eco_OR2_u0/y]
+connect_net     s                                      [get_pin eco_AND2_u1/a]
+connect_net     b                                      [get_pin eco_AND2_u1/b]
+connect_net     eco_n4_u1                              [get_pin eco_AND2_u1/y]
+connect_net     eco_n1_u3                              [get_pin eco_AND2_u2/a]
+connect_net     a                                      [get_pin eco_AND2_u2/b]
+connect_net     eco_n5_u2                              [get_pin eco_AND2_u2/y]
+connect_net     s                                      [get_pin eco_INV_u3/a]
+connect_net     eco_n1_u3                              [get_pin eco_INV_u3/y]
+
+---------------------------------------------------------------
   Cell usage
-───────────────────────────────────────────────────────────────
-  AND2 × 2
-  INV × 1
-  OR2 × 1
-═══════════════════════════════════════════════════════════════
+---------------------------------------------------------------
+  AND2 x 2
+  INV x 1
+  OR2 x 1
+===============================================================
