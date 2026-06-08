@@ -23,48 +23,48 @@ inputs = ["A1", "A2", "A3", "A4"]
 output = "Z"
 function = "A1 & A2 & A3 & A4"
 
-# [[cell]]
-# name = "AO21D0BWP7T40P140"
-# inputs = ["A1", "A2", "B"]
-# output = "Z"
-# function = "(A1 & A2) | B"
+[[cell]]
+name = "AO21D0BWP7T40P140"
+inputs = ["A1", "A2", "B"]
+output = "Z"
+function = "(A1 & A2) | B"
 
 # PAGE 64
-# [[cell]]
-# name = "AO221D0BWP7T40P140"
-# inputs = ["A1", "A2", "B1", "B2", "C"]
-# output = "Z"
-# function = "(A1 & A2) | (B1 & B2) | C"
+[[cell]]
+name = "AO221D0BWP7T40P140"
+inputs = ["A1", "A2", "B1", "B2", "C"]
+output = "Z"
+function = "(A1 & A2) | (B1 & B2) | C"
 
-# [[cell]]
-# name = "AO22D0BWP7T40P140"
-# inputs = ["A1", "A2", "B1", "B2"]
-# output = "Z"
-# function = "(A1 & A2) | (B1 & B2)"
+[[cell]]
+name = "AO22D0BWP7T40P140"
+inputs = ["A1", "A2", "B1", "B2"]
+output = "Z"
+function = "(A1 & A2) | (B1 & B2)"
 
-# [[cell]]
-# name = "AO31D0BWP7T40P140"
-# inputs = ["A1", "A2", "A3", "B"]
-# output = "Z"
-# function = "(A1 & A2 & A3) | B"
+[[cell]]
+name = "AO31D0BWP7T40P140"
+inputs = ["A1", "A2", "A3", "B"]
+output = "Z"
+function = "(A1 & A2 & A3) | B"
 
-# [[cell]]
-# name = "AOI221D0BWP7T40P140"
-# inputs = ["A1", "A2", "B", "C"]
-# output = "ZN"
-# function = "!((A1 & A2) | B | C)"
+[[cell]]
+name = "AOI221D0BWP7T40P140"
+inputs = ["A1", "A2", "B", "C"]
+output = "ZN"
+function = "!((A1 & A2) | B | C)"
 
-# [[cell]]
-# name = "AOI21D0BWP7T40P140"
-# inputs = ["A1", "A2", "B"]
-# output = "ZN"
-# function = "!((A1 & A2) | B)"
+[[cell]]
+name = "AOI21D0BWP7T40P140"
+inputs = ["A1", "A2", "B"]
+output = "ZN"
+function = "!((A1 & A2) | B)"
 
-# [[cell]]
-# name = "AOI22D0BWP7T40P140"
-# inputs = ["A1", "A2", "B1", "B2"]
-# output = "ZN"
-# function = "!((A1 & A2) | (B1 & B2))"
+[[cell]]
+name = "AOI22D0BWP7T40P140"
+inputs = ["A1", "A2", "B1", "B2"]
+output = "ZN"
+function = "!((A1 & A2) | (B1 & B2))"
 
 # OR2/3/4
 [[cell]]
@@ -174,53 +174,53 @@ inputs = ["I0", "I1", "S"]
 output = "ZN"
 function = "!((I1 & S) | (I0 & !S))"
 
-# [[cell]]
-# name = "OA211D0BWP7T40P140"
-# inputs = ["A1", "A2", "B", "C"]
-# output = "Z"
-# function = "(A1 | A2) & B & C"
+[[cell]]
+name = "OA211D0BWP7T40P140"
+inputs = ["A1", "A2", "B", "C"]
+output = "Z"
+function = "(A1 | A2) & B & C"
 
-# [[cell]]
-# name = "OA21D0BWP7T40P140"
-# inputs = ["A1", "A2", "B"]
-# output = "Z"
-# function = "(A1 | A2) & B"
+[[cell]]
+name = "OA21D0BWP7T40P140"
+inputs = ["A1", "A2", "B"]
+output = "Z"
+function = "(A1 | A2) & B"
 
-# [[cell]]
-# name = "OA221D0BWP7T40P140"
-# inputs = ["A1", "A2", "B1", "B2", "C"]
-# output = "Z"
-# function = "(A1 | A2) & (B1 | B2) & C"
+[[cell]]
+name = "OA221D0BWP7T40P140"
+inputs = ["A1", "A2", "B1", "B2", "C"]
+output = "Z"
+function = "(A1 | A2) & (B1 | B2) & C"
 
-# [[cell]]
-# name = "OA22D0BWP7T40P140"
-# inputs = ["A1", "A2", "B1", "B2"]
-# output = "Z"
-# function = "(A1 | A2) & (B1 | B2)"
+[[cell]]
+name = "OA22D0BWP7T40P140"
+inputs = ["A1", "A2", "B1", "B2"]
+output = "Z"
+function = "(A1 | A2) & (B1 | B2)"
 
-# [[cell]]
-# name = "OAI211D0BWP7T40P140"
-# inputs = ["A1", "A2", "B", "C"]
-# output = "ZN"
-# function = "!((A1 | A2) & B & C)"
+[[cell]]
+name = "OAI211D0BWP7T40P140"
+inputs = ["A1", "A2", "B", "C"]
+output = "ZN"
+function = "!((A1 | A2) & B & C)"
 
-# [[cell]]
-# name = "OAI21D0BWP7T40P140"
-# inputs = ["A1", "A2", "B"]
-# output = "ZN"
-# function = "!((A1 | A2) & B)"
+[[cell]]
+name = "OAI21D0BWP7T40P140"
+inputs = ["A1", "A2", "B"]
+output = "ZN"
+function = "!((A1 | A2) & B)"
 
-# [[cell]]
-# name = "OAI221D0BWP7T40P140"
-# inputs = ["A1", "A2", "B1", "B2", "C"]
-# output = "ZN"
-# function = "!((A1 | A2) & (B1 | B2) & C)"
+[[cell]]
+name = "OAI221D0BWP7T40P140"
+inputs = ["A1", "A2", "B1", "B2", "C"]
+output = "ZN"
+function = "!((A1 | A2) & (B1 | B2) & C)"
 
-# [[cell]]
-# name = "OAI22D0BWP7T40P140"
-# inputs = ["A1", "A2", "B1", "B2"]
-# output = "Z"
-# function = "!((A1 | A2) & (B1 | B2))"
+[[cell]]
+name = "OAI22D0BWP7T40P140"
+inputs = ["A1", "A2", "B1", "B2"]
+output = "Z"
+function = "!((A1 | A2) & (B1 | B2))"
 
 # XOR2/3/4
 [[cell]]
