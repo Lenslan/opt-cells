@@ -127,13 +127,31 @@ fn eval_expr_to_aig<'a>(
     use crate::frontend::ast::Expr::*;
     match expr {
         Lit {
-            value: BitLiteral::Single(b),
+            value: BitLiteral::Unsized(0),
             ..
-        } => Ok(if *b { aig.const1() } else { aig.const0() }),
+        } => Ok(aig.const0()),
+        Lit {
+            value: BitLiteral::Unsized(1),
+            ..
+        } => Ok(aig.const1()),
+        Lit {
+            value: BitLiteral::Unsized(v),
+            ..
+        } => Err(format!(
+            "integer literal {} not allowed in cell function (only 0 and 1)",
+            v
+        )),
         Lit {
             value: BitLiteral::Vector { .. },
             ..
         } => Err("vector literal not allowed in cell function".into()),
+        DynIndex { name, .. } => Err(format!(
+            "bit-select not allowed in cell function on '{}'",
+            name
+        )),
+        Binary { .. } => {
+            Err("arithmetic and relational operators not allowed in cell function".into())
+        }
         Ref { name, sel, .. } => {
             if sel.is_some() {
                 return Err(format!(
@@ -145,7 +163,10 @@ fn eval_expr_to_aig<'a>(
                 format!("function references '{}' which is not in inputs list", name)
             })
         }
-        Not { inner, .. } => Ok(eval_expr_to_aig(inner, aig, env, _inputs)?.inv()),
+        // Cell pins are single bits, where `!` and `~` coincide.
+        Not { inner, .. } | BitNot { inner, .. } => {
+            Ok(eval_expr_to_aig(inner, aig, env, _inputs)?.inv())
+        }
         And { lhs, rhs, .. } => {
             let l = eval_expr_to_aig(lhs, aig, env, _inputs)?;
             let r = eval_expr_to_aig(rhs, aig, env, _inputs)?;

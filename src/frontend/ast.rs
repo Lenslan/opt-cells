@@ -45,7 +45,8 @@ pub struct Stmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lvalue {
     pub name: String,
-    pub index: Option<u32>,
+    /// `None` = whole signal, `Index` = one bit, `Range` = slice.
+    pub sel: Option<BitSel>,
     pub span: Span,
 }
 
@@ -60,8 +61,27 @@ pub enum Expr {
         sel: Option<BitSel>,
         span: Span,
     },
+    /// `name[index]` where `index` is not a plain integer: a run-time bit select.
+    DynIndex {
+        name: String,
+        index: Box<Expr>,
+        span: Span,
+    },
+    /// Logical negation `!x`: 1 bit, true iff `x` is zero.
     Not {
         inner: Box<Expr>,
+        span: Span,
+    },
+    /// Bitwise complement `~x`.
+    BitNot {
+        inner: Box<Expr>,
+        span: Span,
+    },
+    /// Arithmetic and relational operators (all unsigned).
+    Binary {
+        op: BinOp,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
         span: Span,
     },
     And {
@@ -97,10 +117,26 @@ pub enum Expr {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BitLiteral {
-    Single(bool),
-    Vector { width: u32, value: u64 },
+    /// Plain decimal integer such as `0`, `1` or `10`. Like a Verilog unsized
+    /// literal it is 32 bits wide in self-determined contexts.
+    Unsized(u64),
+    Vector {
+        width: u32,
+        value: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,7 +150,10 @@ impl Expr {
         match self {
             Expr::Lit { span, .. }
             | Expr::Ref { span, .. }
+            | Expr::DynIndex { span, .. }
             | Expr::Not { span, .. }
+            | Expr::BitNot { span, .. }
+            | Expr::Binary { span, .. }
             | Expr::And { span, .. }
             | Expr::Or { span, .. }
             | Expr::Xor { span, .. }
@@ -143,7 +182,7 @@ mod tests {
     #[test]
     fn expr_span_round_trip() {
         let e = Expr::Lit {
-            value: BitLiteral::Single(true),
+            value: BitLiteral::Unsized(1),
             span: Span::new(1, 2),
         };
         assert_eq!(e.span(), Span::new(1, 2));

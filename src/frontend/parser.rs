@@ -38,58 +38,129 @@ pub fn expr_parser<'src>(
                 }
             });
 
-        // single bit literal: only when not followed by '
-        let bit_lit = choice((just('0').to(false), just('1').to(true)))
+        // unsized decimal integer (0, 1, 10, ...): only when not followed by '
+        let int_lit = text::int(10)
             .then_ignore(just('\'').not().rewind())
-            .map_with(|b, e| Expr::Lit {
-                value: BitLiteral::Single(b),
-                span: to_span(e.span()),
+            .try_map(|s: &str, span| {
+                s.parse::<u64>()
+                    .ok()
+                    .filter(|v| *v <= u32::MAX as u64)
+                    .map(|v| Expr::Lit {
+                        value: BitLiteral::Unsized(v),
+                        span: to_span(span),
+                    })
+                    .ok_or_else(|| {
+                        Rich::custom(
+                            span,
+                            "unsized integer literal does not fit in 32 bits; use a sized literal",
+                        )
+                    })
             });
 
-        // bit-select: [i] or [hi:lo]
-        let bit_sel = uint
-            .then(just(':').padded().ignore_then(uint).or_not())
+        // select: [hi:lo] with integer bounds, or [expr]
+        enum Sel {
+            Range(u32, u32),
+            Expr(Expr),
+        }
+        let range_sel = uint
+            .then_ignore(just(':').padded())
+            .then(uint)
             .delimited_by(just('[').padded(), just(']').padded())
-            .map(|(a, b)| match b {
-                Some(lo) => BitSel::Range { hi: a, lo },
-                None => BitSel::Index(a),
-            });
+            .map(|(hi, lo)| Sel::Range(hi, lo));
+        let expr_sel = expr
+            .clone()
+            .delimited_by(just('[').padded(), just(']').padded())
+            .map(Sel::Expr);
 
-        // identifier reference
-        let signal_ref = text::ident().then(bit_sel.or_not()).map_with(
-            |(name, sel): (&str, Option<BitSel>), e| Expr::Ref {
-                name: name.to_string(),
-                sel,
-                span: to_span(e.span()),
-            },
-        );
+        // identifier reference; a plain integer index stays a static bit select
+        let signal_ref = text::ident()
+            .then(choice((range_sel, expr_sel)).or_not())
+            .map_with(|(name, sel): (&str, Option<Sel>), e| {
+                let name = name.to_string();
+                let span = to_span(e.span());
+                let sel = match sel {
+                    None => None,
+                    Some(Sel::Range(hi, lo)) => Some(BitSel::Range { hi, lo }),
+                    Some(Sel::Expr(Expr::Lit {
+                        value: BitLiteral::Unsized(i),
+                        ..
+                    })) => Some(BitSel::Index(i as u32)),
+                    Some(Sel::Expr(index)) => {
+                        return Expr::DynIndex {
+                            name,
+                            index: Box::new(index),
+                            span,
+                        }
+                    }
+                };
+                Expr::Ref { name, sel, span }
+            });
 
         let parens = expr
             .clone()
             .delimited_by(just('(').padded(), just(')').padded());
 
-        let primary = choice((parens, vec_lit, bit_lit, signal_ref)).padded();
+        let primary = choice((parens, vec_lit, int_lit, signal_ref)).padded();
 
-        // unary: ! or ~  (right-associative via recursive)
+        // unary: ! (logical) or ~ (bitwise)  (right-associative via recursive)
         let unary = recursive(|unary| {
             choice((
                 one_of("!~")
                     .padded()
-                    .ignore_then(unary)
-                    .map_with(|inner, e| Expr::Not {
-                        inner: Box::new(inner),
-                        span: to_span(e.span()),
+                    .then(unary)
+                    .map_with(|(op, inner), e| {
+                        let inner = Box::new(inner);
+                        let span = to_span(e.span());
+                        if op == '!' {
+                            Expr::Not { inner, span }
+                        } else {
+                            Expr::BitNot { inner, span }
+                        }
                     }),
                 primary.clone(),
             ))
         });
 
-        // eq_expr: unary (("==" | "!=") unary)?
+        let binary = |lhs: Expr, (op, rhs): (BinOp, Expr), span: MySpan| Expr::Binary {
+            op,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+            span,
+        };
+
+        // mul_expr: unary ("*" unary)*
+        let mul_op = just('*').to(BinOp::Mul).padded();
+        let mul_expr = unary.clone().foldl_with(
+            mul_op.then(unary.clone()).repeated(),
+            move |lhs, rest, e| binary(lhs, rest, to_span(e.span())),
+        );
+
+        // add_expr: mul_expr (("+" | "-") mul_expr)*
+        let add_op = choice((just('+').to(BinOp::Add), just('-').to(BinOp::Sub))).padded();
+        let add_expr = mul_expr.clone().foldl_with(
+            add_op.then(mul_expr.clone()).repeated(),
+            move |lhs, rest, e| binary(lhs, rest, to_span(e.span())),
+        );
+
+        // rel_expr: add_expr (("<=" | ">=" | "<" | ">") add_expr)*
+        let rel_op = choice((
+            just("<=").to(BinOp::Le),
+            just(">=").to(BinOp::Ge),
+            just("<").to(BinOp::Lt),
+            just(">").to(BinOp::Gt),
+        ))
+        .padded();
+        let rel_expr = add_expr.clone().foldl_with(
+            rel_op.then(add_expr.clone()).repeated(),
+            move |lhs, rest, e| binary(lhs, rest, to_span(e.span())),
+        );
+
+        // eq_expr: rel_expr (("==" | "!=") rel_expr)?
         let eq_op = choice((just("==").to(0u8), just("!=").to(1u8))).padded();
 
-        let eq_expr = unary
+        let eq_expr = rel_expr
             .clone()
-            .then(eq_op.then(unary.clone()).or_not())
+            .then(eq_op.then(rel_expr.clone()).or_not())
             .map_with(|(lhs, rest), e| match rest {
                 None => lhs,
                 Some((op, rhs)) => {
@@ -228,16 +299,20 @@ pub fn stmt_parser<'src>(
         .padded()
         .map(|s: &str| s.parse::<u32>().unwrap());
 
-    let lvalue = ident
-        .then(
-            uint.delimited_by(just('[').padded(), just(']').padded())
-                .or_not(),
-        )
-        .map_with(|(name, idx), e| Lvalue {
-            name,
-            index: idx,
-            span: to_span(e.span()),
+    // target: name, name[i] or name[hi:lo]
+    let sel = uint
+        .then(just(':').padded().ignore_then(uint).or_not())
+        .delimited_by(just('[').padded(), just(']').padded())
+        .map(|(a, b)| match b {
+            Some(lo) => BitSel::Range { hi: a, lo },
+            None => BitSel::Index(a),
         });
+
+    let lvalue = ident.then(sel.or_not()).map_with(|(name, sel), e| Lvalue {
+        name,
+        sel,
+        span: to_span(e.span()),
+    });
 
     lvalue
         .then_ignore(just('=').padded())
@@ -293,7 +368,7 @@ mod tests {
         assert!(matches!(
             e,
             Expr::Lit {
-                value: BitLiteral::Single(false),
+                value: BitLiteral::Unsized(0),
                 ..
             }
         ));
@@ -305,7 +380,7 @@ mod tests {
         assert!(matches!(
             e,
             Expr::Lit {
-                value: BitLiteral::Single(true),
+                value: BitLiteral::Unsized(1),
                 ..
             }
         ));
@@ -461,6 +536,82 @@ mod tests {
         } else {
             panic!("expected NOT");
         }
+    }
+
+    fn bin(e: &Expr) -> (BinOp, &Expr, &Expr) {
+        match e {
+            Expr::Binary { op, lhs, rhs, .. } => (*op, lhs, rhs),
+            other => panic!("not a binary op: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unsized_integer_literal() {
+        assert!(matches!(
+            parse("10"),
+            Expr::Lit {
+                value: BitLiteral::Unsized(10),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn tilde_is_bitwise_and_bang_is_logical() {
+        assert!(matches!(parse("~a"), Expr::BitNot { .. }));
+        assert!(matches!(parse("!a"), Expr::Not { .. }));
+    }
+
+    #[test]
+    fn mul_binds_tighter_than_add_and_add_is_left_associative() {
+        let e = parse("a - b + c * d");
+        let (op, lhs, rhs) = bin(&e);
+        assert_eq!(op, BinOp::Add);
+        assert_eq!(bin(lhs).0, BinOp::Sub);
+        assert_eq!(bin(rhs).0, BinOp::Mul);
+    }
+
+    #[test]
+    fn relational_operators() {
+        for (src, want) in [
+            ("a < b", BinOp::Lt),
+            ("a <= b", BinOp::Le),
+            ("a > b", BinOp::Gt),
+            ("a >= b", BinOp::Ge),
+        ] {
+            assert_eq!(bin(&parse(src)).0, want, "{src}");
+        }
+    }
+
+    #[test]
+    fn precedence_add_then_relational_then_equality_then_and() {
+        // parses as   a & (((b + c) < d) == e)
+        let e = parse("a & b + c < d == e");
+        let Expr::And { rhs, .. } = e else {
+            panic!("expected AND at the top");
+        };
+        let Expr::Eq { lhs, .. } = *rhs else {
+            panic!("expected == under AND");
+        };
+        let (op, sum, _) = bin(&lhs);
+        assert_eq!(op, BinOp::Lt);
+        assert_eq!(bin(sum).0, BinOp::Add);
+    }
+
+    #[test]
+    fn dynamic_index_takes_an_expression() {
+        let e = parse("bitmap[idx + 1]");
+        let Expr::DynIndex { name, index, .. } = e else {
+            panic!("expected dynamic index");
+        };
+        assert_eq!(name, "bitmap");
+        assert_eq!(bin(&index).0, BinOp::Add);
+    }
+
+    #[test]
+    fn slice_assignment_target() {
+        let p = parse_full("output y[3:0]; y[2:1] = 2'b10;");
+        assert_eq!(p.stmts[0].lhs.sel, Some(BitSel::Range { hi: 2, lo: 1 }));
     }
 
     fn parse_full(src: &str) -> Program {

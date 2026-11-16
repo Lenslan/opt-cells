@@ -1,3 +1,4 @@
+pub mod bitvec;
 pub mod builder;
 pub mod cuts;
 pub mod node;
