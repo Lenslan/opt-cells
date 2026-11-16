@@ -120,7 +120,7 @@ fn expected_tcl_atom(name: &str) -> String {
     {
         name.to_string()
     } else {
-        format!("{{{}}}", name.replace('\\', "\\\\").replace('}', "\\}"))
+        name.replace('\\', "\\\\").replace('}', "\\}")
     }
 }
 
@@ -454,13 +454,13 @@ y = eco_parity ^ a;
         case.tcl
     );
     assert!(
-        case.tcl.contains("connect_net     {state[3]}"),
-        "vector input names must be Tcl-braced\n{}",
+        case.tcl.contains("connect_net     state[3] "),
+        "vector input bits are named state[i] without braces\n{}",
         case.tcl
     );
     assert!(
-        case.tcl.contains("connect_net     {state[0]}"),
-        "vector input names must be Tcl-braced\n{}",
+        case.tcl.contains("connect_net     state[0] "),
+        "vector input bits are named state[i] without braces\n{}",
         case.tcl
     );
     assert!(

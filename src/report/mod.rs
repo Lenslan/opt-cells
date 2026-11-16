@@ -286,7 +286,7 @@ fn tcl_atom(name: &str) -> String {
     {
         name.to_string()
     } else {
-        format!("{}", name.replace('\\', "\\\\").replace('}', "\\}"))
+        name.replace('\\', "\\\\").replace('}', "\\}")
     }
 }
 
