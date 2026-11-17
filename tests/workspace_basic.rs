@@ -55,6 +55,7 @@ fn map_inline(input_text: &str) -> MappedCase {
         library_path: &library_path,
         display_names: &display_names,
         net_aliases: &net_aliases,
+        name_prefix: "eco_",
     });
 
     MappedCase {

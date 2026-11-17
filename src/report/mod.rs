@@ -1,8 +1,31 @@
 use std::collections::HashMap;
 
 use crate::aig::{Aig, NodeId, NodeKind};
+use crate::error::OptCellsError;
 use crate::frontend::library::{CellDecl, CellId, CellLib};
 use crate::mapper::MappedNetlist;
+
+/// Namespace of every cell and net the ECO script creates. A DSL intermediate opts into it
+/// by starting its name with this marker.
+const ECO: &str = "eco_";
+
+/// Name prefix for one run: `eco_`, or `eco_<custom>_` when the caller tags the run.
+///
+/// The tag is written verbatim into Tcl words and `inst/pin` paths, so only
+/// `[A-Za-z0-9_]+` is accepted.
+pub fn name_prefix(custom: Option<&str>) -> Result<String, OptCellsError> {
+    let Some(custom) = custom else {
+        return Ok(ECO.to_string());
+    };
+    if custom.is_empty()
+        || !custom
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(OptCellsError::InvalidPrefix(custom.to_string()));
+    }
+    Ok(format!("{ECO}{custom}_"))
+}
 
 pub struct ReportInput<'a> {
     pub aig: &'a Aig,
@@ -14,6 +37,8 @@ pub struct ReportInput<'a> {
     pub display_names: &'a HashMap<String, String>,
     /// AIG signal `(node, polarity)` -> user-requested internal net label.
     pub net_aliases: &'a HashMap<(NodeId, bool), String>,
+    /// Prefix of every created cell and net name; see [`name_prefix`].
+    pub name_prefix: &'a str,
 }
 
 pub fn render(r: &ReportInput) -> String {
@@ -69,9 +94,7 @@ pub fn render(r: &ReportInput) -> String {
         let out_label = if let Some(names) = po_at.get(&(c.aig_node, c.output_negated)) {
             names.join(", ")
         } else {
-            r.net_aliases
-                .get(&(c.aig_node, c.output_negated))
-                .cloned()
+            alias_label(r, c.aig_node, c.output_negated)
                 .unwrap_or_else(|| format!("n{}", c.aig_node.0))
         };
         out.push_str(&format!(
@@ -121,7 +144,7 @@ pub fn render_tcl(r: &ReportInput) -> String {
         push_tcl_line(
             &mut out,
             "create_cell",
-            &instance_name(&cell.name, c.uid),
+            &instance_name(r.name_prefix, &cell.name, c.uid),
             Some(&format!("[get_lib_cells */{}]", cell.name)),
         );
     }
@@ -146,7 +169,7 @@ pub fn render_tcl(r: &ReportInput) -> String {
         let Some(cell) = ctx.cell_decl(c.cell_id) else {
             continue;
         };
-        let inst_name = instance_name(&cell.name, c.uid);
+        let inst_name = instance_name(r.name_prefix, &cell.name, c.uid);
         for (i, pi) in c.pin_inputs.iter().enumerate() {
             let Some(pin_name) = cell.inputs.get(i) else {
                 continue;
@@ -235,7 +258,7 @@ impl<'ctx, 'data> TclContext<'ctx, 'data> {
             .and_then(|names| names.first())
             .cloned()
             .or_else(|| self.alias_net_name(node, negated))
-            .unwrap_or_else(|| internal_net_name(node, uid))
+            .unwrap_or_else(|| internal_net_name(self.report.name_prefix, node, uid))
     }
 
     fn driven_signal_net_name(&self, node: NodeId, negated: bool) -> String {
@@ -245,31 +268,41 @@ impl<'ctx, 'data> TclContext<'ctx, 'data> {
             .cloned()
             .or_else(|| self.alias_net_name(node, negated))
             .unwrap_or_else(|| match self.signal_uid.get(&(node, negated)) {
-                Some(uid) => internal_net_name(node, *uid),
-                None => format!("eco_n{}", node.0),
+                Some(uid) => internal_net_name(self.report.name_prefix, node, *uid),
+                None => format!("{}n{}", self.report.name_prefix, node.0),
             })
     }
 
     fn internal_net_name(&self, node: NodeId, negated: bool, uid: u32) -> String {
         self.alias_net_name(node, negated)
-            .unwrap_or_else(|| internal_net_name(node, uid))
+            .unwrap_or_else(|| internal_net_name(self.report.name_prefix, node, uid))
     }
 
     fn alias_net_name(&self, node: NodeId, negated: bool) -> Option<String> {
         match &self.report.aig.node(node).kind {
             NodeKind::Const0 => None,
             NodeKind::PrimaryInput { .. } if !negated => None,
-            _ => self.report.net_aliases.get(&(node, negated)).cloned(),
+            _ => alias_label(self.report, node, negated),
         }
     }
 }
 
-fn instance_name(cell_name: &str, uid: u32) -> String {
-    format!("eco_{}_u{}", cell_name, uid)
+fn instance_name(prefix: &str, cell_name: &str, uid: u32) -> String {
+    format!("{}{}_u{}", prefix, cell_name, uid)
 }
 
-fn internal_net_name(node: NodeId, uid: u32) -> String {
-    format!("eco_n{}_u{}", node.0, uid)
+fn internal_net_name(prefix: &str, node: NodeId, uid: u32) -> String {
+    format!("{}n{}_u{}", prefix, node.0, uid)
+}
+
+/// The net label a DSL intermediate requested for `(node, negated)`, moved into this
+/// run's namespace: its leading `eco_` marker becomes the run prefix.
+fn alias_label(r: &ReportInput, node: NodeId, negated: bool) -> Option<String> {
+    let alias = r.net_aliases.get(&(node, negated))?;
+    Some(match alias.strip_prefix(ECO) {
+        Some(rest) => format!("{}{}", r.name_prefix, rest),
+        None => alias.clone(),
+    })
 }
 
 fn push_tcl_line(out: &mut String, cmd: &str, arg: &str, tail: Option<&str>) {
@@ -311,23 +344,18 @@ fn leaf_label(
                     .cloned()
                     .unwrap_or_else(|| name.clone())
             } else {
-                r.net_aliases
-                    .get(&(leaf, true))
-                    .cloned()
-                    .unwrap_or_else(|| match signal_uid.get(&(leaf, true)) {
-                        Some(uid) => format!("n{}_u{}", leaf.0, uid),
-                        None => format!("n{}", leaf.0),
-                    })
+                alias_label(r, leaf, true).unwrap_or_else(|| match signal_uid.get(&(leaf, true)) {
+                    Some(uid) => format!("n{}_u{}", leaf.0, uid),
+                    None => format!("n{}", leaf.0),
+                })
             }
         }
-        NodeKind::And2 { .. } => r
-            .net_aliases
-            .get(&(leaf, leaf_negated))
-            .cloned()
-            .unwrap_or_else(|| match signal_uid.get(&(leaf, leaf_negated)) {
+        NodeKind::And2 { .. } => alias_label(r, leaf, leaf_negated).unwrap_or_else(|| {
+            match signal_uid.get(&(leaf, leaf_negated)) {
                 Some(uid) => format!("n{}_u{}", leaf.0, uid),
                 None => format!("n{}", leaf.0),
-            }),
+            }
+        }),
     }
 }
 
@@ -338,6 +366,27 @@ mod tests {
     use crate::aig::Tt64;
     use crate::frontend::library::{CellDecl, CellId};
     use crate::mapper::netlist::{CellInstance, PinInput};
+
+    #[test]
+    fn name_prefix_defaults_to_eco() {
+        assert_eq!(name_prefix(None).unwrap(), "eco_");
+    }
+
+    #[test]
+    fn name_prefix_inserts_custom_tag_after_eco() {
+        assert_eq!(name_prefix(Some("test")).unwrap(), "eco_test_");
+        assert_eq!(name_prefix(Some("Fix_2")).unwrap(), "eco_Fix_2_");
+    }
+
+    #[test]
+    fn name_prefix_rejects_empty_and_unsafe_tags() {
+        for bad in ["", "a b", "a/b", "a-b", "a.b", "x[0]", "$x", "caf\u{e9}"] {
+            match name_prefix(Some(bad)) {
+                Err(OptCellsError::InvalidPrefix(got)) => assert_eq!(got, bad),
+                other => panic!("{bad:?} must be rejected, got {other:?}"),
+            }
+        }
+    }
 
     #[test]
     fn renders_nand_example() {
@@ -387,6 +436,7 @@ mod tests {
             library_path: "libs/basic.toml",
             display_names: &display,
             net_aliases: &aliases,
+            name_prefix: "eco_",
         });
         assert!(s.contains("Total cells used : 1"));
         assert!(s.contains("NAND2"));
@@ -394,5 +444,79 @@ mod tests {
         assert!(s.contains("NAND2 x 1"));
         assert!(s.contains("create_cell"));
         assert!(s.contains("connect_net"));
+    }
+
+    /// `net_aliases` built by hand may hold labels outside the `eco_` namespace; those
+    /// are the caller's exact names and are not rewritten.
+    #[test]
+    fn alias_without_the_eco_marker_is_kept_as_is() {
+        // y = !(a & b) as AND2 (u1) feeding INV (u0), with the AND2 output labelled "mid".
+        let mut aig = Aig::new();
+        let a = aig.add_input("a");
+        let b = aig.add_input("b");
+        let ab = aig.and(a, b);
+        aig.add_output("y", ab.inv());
+        let lib = CellLib {
+            cells: vec![
+                CellDecl {
+                    id: CellId(0),
+                    name: "INV".into(),
+                    inputs: vec!["a".into()],
+                    output_pin: "y".into(),
+                    tt: Tt64(0x1),
+                    n_inputs: 1,
+                },
+                CellDecl {
+                    id: CellId(1),
+                    name: "AND2".into(),
+                    inputs: vec!["a".into(), "b".into()],
+                    output_pin: "y".into(),
+                    tt: Tt64(0x8),
+                    n_inputs: 2,
+                },
+            ],
+            notes: vec![],
+        };
+        let pin = |leaf| PinInput {
+            leaf,
+            leaf_negated: false,
+        };
+        let netlist = MappedNetlist {
+            cells: vec![
+                CellInstance {
+                    uid: 0,
+                    cell_id: CellId(0),
+                    aig_node: ab.node,
+                    pin_inputs: vec![pin(ab.node)],
+                    output_negated: true,
+                },
+                CellInstance {
+                    uid: 1,
+                    cell_id: CellId(1),
+                    aig_node: ab.node,
+                    pin_inputs: vec![pin(a.node), pin(b.node)],
+                    output_negated: false,
+                },
+            ],
+            outputs: vec![("y".into(), ab.node, true)],
+            total_cells: 2,
+        };
+        let display: HashMap<String, String> = HashMap::new();
+        let aliases = HashMap::from([((ab.node, false), "mid".to_string())]);
+
+        let s = render(&ReportInput {
+            aig: &aig,
+            lib: &lib,
+            netlist: &netlist,
+            input_path: "inline.dsl",
+            library_path: "lib.toml",
+            display_names: &display,
+            net_aliases: &aliases,
+            name_prefix: "eco_test_",
+        });
+
+        assert!(s.contains("  u1 : AND2  (a=a, b=b)  -> mid\n"), "{s}");
+        assert!(s.contains("create_net      mid\n"), "{s}");
+        assert!(s.contains("[get_pin eco_test_INV_u0/a]"), "{s}");
     }
 }

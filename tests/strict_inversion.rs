@@ -12,6 +12,7 @@ fn run(input_rel: &str, lib_rel: &str) -> String {
         input_path,
         input_text,
         library_path,
+        prefix: None,
     })
     .expect("pipeline ok")
     .0
@@ -136,6 +137,7 @@ fn no_inv_cell_and_inversion_needed_is_an_error() {
         input_path: "tests/fixtures/inputs/nand.dsl".to_string(),
         input_text,
         library_path: "tests/fixtures/libs/no_inv.toml".to_string(),
+        prefix: None,
     });
     assert!(
         res.is_err(),

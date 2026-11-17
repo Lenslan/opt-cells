@@ -17,6 +17,7 @@ fn run(input_rel: &str, library_rel: &str) -> String {
         input_path,
         input_text,
         library_path,
+        prefix: None,
     })
     .expect("pipeline ok");
     report

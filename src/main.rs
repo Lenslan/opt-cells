@@ -18,6 +18,7 @@ fn main() -> ExitCode {
         input_path: name,
         input_text: text,
         library_path: args.library.clone(),
+        prefix: args.prefix.clone(),
     });
     match result {
         Ok((report_text, _display)) => {

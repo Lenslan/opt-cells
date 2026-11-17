@@ -14,9 +14,13 @@ pub struct RunInputs {
     pub input_path: String,
     pub input_text: String,
     pub library_path: String,
+    /// Optional tag for this run: created cells and nets are named `eco_<prefix>_*`
+    /// instead of `eco_*`.
+    pub prefix: Option<String>,
 }
 
 pub fn run_pipeline(inputs: RunInputs) -> Result<(String, HashMap<String, String>), OptCellsError> {
+    let name_prefix = report::name_prefix(inputs.prefix.as_deref())?;
     let prog = frontend::parser::parse_program(&inputs.input_text, &inputs.input_path)?;
     let elab = frontend::elaborate::elaborate(&prog, &inputs.input_path, &inputs.input_text)?;
     let lib = frontend::library::load_library(&inputs.library_path)?;
@@ -38,6 +42,7 @@ pub fn run_pipeline(inputs: RunInputs) -> Result<(String, HashMap<String, String
         library_path: &inputs.library_path,
         display_names: &elab.display_names,
         net_aliases: &elab.net_aliases,
+        name_prefix: &name_prefix,
     });
     Ok((report_string, elab.display_names))
 }

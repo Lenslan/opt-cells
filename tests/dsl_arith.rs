@@ -418,6 +418,7 @@ fn pipeline_reports_cells_and_tcl_for_arithmetic() {
                      nxt = cnt + 1;"
             .into(),
         library_path: lib_path(),
+        prefix: None,
     })
     .expect("pipeline ok");
     assert!(report.contains("-> hit"), "{report}");

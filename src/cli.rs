@@ -21,4 +21,8 @@ pub struct Args {
     /// Only show cell-count summary.
     #[arg(short = 'q', long = "quiet")]
     pub quiet: bool,
+
+    /// Name created cells and nets eco_<PREFIX>_* instead of eco_* (letters, digits, "_").
+    #[arg(short = 'p', long = "prefix")]
+    pub prefix: Option<String>,
 }

@@ -43,6 +43,8 @@ pub enum OptCellsError {
     },
     #[error("mapping error: {message}")]
     Mapping { message: String },
+    #[error("invalid prefix '{0}': expected one or more ASCII letters, digits or '_'")]
+    InvalidPrefix(String),
 }
 
 impl OptCellsError {

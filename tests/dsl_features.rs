@@ -7,6 +7,7 @@ fn run_inline(input_text: &str, library_path: &str) -> String {
         input_path: "inline.dsl".to_string(),
         input_text: input_text.to_string(),
         library_path: library_path.to_string(),
+        prefix: None,
     })
     .expect("pipeline ok")
     .0
