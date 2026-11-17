@@ -12,6 +12,7 @@
 - 基于 AIG、k-cut 枚举、NPN canonical matching 和两阶段 DP covering 进行 cell 映射。
 - 严格区分“cell 内建反相”和“额外插入反相器”：额外反相必须由真实 `INV` cell 实现并计入 cell 数。
 - 输出 human-readable mapping report，包含 mapped netlist、ECO Tcl script 和 cell usage。
+- 新建的 cell 和 net 统一带 `eco_` 前缀，可用 `--prefix` 为每次运行追加自定义标记（`eco_<PREFIX>_`）。
 - 带有 unit tests、golden tests、property tests 和 GitHub Actions CI。
 
 ## 项目结构
@@ -80,6 +81,7 @@ CLI 参数由 `clap` 生成，核心参数如下：
 | `-l, --library <FILE>` | TOML 单元库路径，默认是 `./lib/basic.toml` |
 | `-o, --output <FILE>` | 将报告写入文件，默认输出到 stdout |
 | `-q, --quiet` | 只输出总 cell 数摘要 |
+| `-p, --prefix <PREFIX>` | 自定义名称前缀：新建的 cell 和 net 由 `eco_*` 改为 `eco_<PREFIX>_*`；只能包含字母、数字和下划线 |
 | `-h, --help` | 显示帮助 |
 | `-V, --version` | 显示版本 |
 
@@ -163,6 +165,28 @@ cargo run -- workspace/STATE_3.dsl -l workspace/lib/basic.toml
 
 `workspace/lib/basic.toml` 包含一组标准单元风格命名的示例 cell，例如 `INVD0BWP7T40P140`、`AN2D0BWP7T40P140`、`MUX2D0BWP7T40P140`、`XOR4D0BWP7T40P140` 等。
 
+### 6. 自定义名称前缀
+
+多份 ECO 脚本要落到同一个设计时，用 `-p, --prefix` 给每次运行新建的 cell 和 net 加上各自的标记，避免重名：
+
+```powershell
+cargo run -- tests/fixtures/inputs/nand.dsl `
+  -l tests/fixtures/libs/basic.toml `
+  --prefix test
+```
+
+Tcl 中新建的名字由 `eco_` 变为 `eco_test_`：
+
+```text
+create_cell     eco_test_NAND2_u0                      [get_lib_cells */NAND2]
+
+connect_net     a                                      [get_pin eco_test_NAND2_u0/a]
+connect_net     b                                      [get_pin eco_test_NAND2_u0/b]
+connect_net     y                                      [get_pin eco_test_NAND2_u0/y]
+```
+
+完整规则见 [Tcl 命名规则](#tcl-命名规则)。
+
 ## DSL 语法
 
 DSL 用来描述组合逻辑。所有声明必须出现在赋值语句之前。
@@ -214,7 +238,7 @@ eco_ab = a & b;
 y = eco_ab | c;
 ```
 
-报告/Tcl 中会优先使用 `eco_ab` 作为该中间 net 的名称。
+报告/Tcl 中会优先使用 `eco_ab` 作为该中间 net 的名称。传入 `--prefix test` 时这个名字是 `eco_test_ab`：DSL 里仍然写 `eco_ab`，开头的 `eco_` 会换成本次运行的完整前缀。
 
 ### 表达式
 
@@ -445,13 +469,29 @@ connect_net     y                                      [get_pin eco_NAND2_u0/y]
 
 ### Tcl 命名规则
 
-- cell instance 名称固定为 `eco_<CELL>_u<uid>`，例如 `eco_NAND2_u0`。
-- 默认内部 net 名称固定为 `eco_n<node>_u<uid>`，例如 `eco_n3_u1`。
+- cell instance 名称默认为 `eco_<CELL>_u<uid>`，例如 `eco_NAND2_u0`。
+- 内部 net 名称默认为 `eco_n<node>_u<uid>`，例如 `eco_n3_u1`。
 - 非 primary output 的 mapped cell 输出会生成 `create_net`。
 - primary output 对应的 net 不会额外生成 `create_net`。
 - pin 名称来自 TOML library 的 `inputs` 和 `output` 字段。
 - 中间信号只有以 `eco_` 开头时才会作为 Tcl/report alias 保留。
 - 常量输入会以 `0` 或 `1` 作为 net 名称。
+
+#### 自定义前缀
+
+`-p, --prefix <PREFIX>` 把本次运行新建的全部 cell 和 net 从 `eco_` 换到 `eco_<PREFIX>_` 下：
+
+| | 不传 | `--prefix test` |
+|---|---|---|
+| cell instance | `eco_NAND2_u0` | `eco_test_NAND2_u0` |
+| 内部 net | `eco_n3_u1` | `eco_test_n3_u1` |
+| DSL 中间信号 `eco_ab` | `eco_ab` | `eco_test_ab` |
+| `input` / `output` 端口、常量 | 原名 | 原名 |
+
+- `PREFIX` 只能包含 ASCII 字母、数字和下划线，且不能为空；否则报错并以退出码 1 结束。
+- `input` / `output` 声明的名字即使以 `eco_` 开头也保持原样：它们指向脚本之外已有的 net（可能由另一份 ECO 脚本以别的前缀创建），不属于本次新建的名字。
+- 报告的 Mapped netlist 段中，别名与 Tcl 段显示同一个名字；`u0`、`n3_u1` 这类简写标签不变。
+- 不传 `--prefix` 时输出与没有这个参数之前完全一致。
 
 ## Rust API
 
@@ -464,8 +504,11 @@ let (report, display_names) = run_pipeline(RunInputs {
     input_path: "inline.dsl".to_string(),
     input_text: "input a, b; output y; y = !(a & b);".to_string(),
     library_path: "tests/fixtures/libs/basic.toml".to_string(),
+    prefix: None, // Some("test".to_string()) 对应 CLI 的 --prefix test
 })?;
 ```
+
+`prefix` 非法（为空或含字母、数字、下划线以外的字符）时返回 `OptCellsError::InvalidPrefix`。
 
 返回值：
 
