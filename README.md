@@ -13,6 +13,7 @@
 - 严格区分“cell 内建反相”和“额外插入反相器”：额外反相必须由真实 `INV` cell 实现并计入 cell 数。
 - 输出 human-readable mapping report，包含 mapped netlist、ECO Tcl script 和 cell usage。
 - 新建的 cell 和 net 统一带 `eco_` 前缀，可用 `--prefix` 为每次运行追加自定义标记（`eco_<PREFIX>_`）。
+- cell 实例名只保留 cell 的功能码：`AO21D0BWP7T40P140` 的实例是 `eco_AO21_u0`。
 - 带有 unit tests、golden tests、property tests 和 GitHub Actions CI。
 
 ## 项目结构
@@ -164,6 +165,8 @@ cargo run -- workspace/STATE_3.dsl -l workspace/lib/basic.toml
 ```
 
 `workspace/lib/basic.toml` 包含一组标准单元风格命名的示例 cell，例如 `INVD0BWP7T40P140`、`AN2D0BWP7T40P140`、`MUX2D0BWP7T40P140`、`XOR4D0BWP7T40P140` 等。
+
+这类名字在实例名中只保留功能码，例如 `AN2D0BWP7T40P140` 的实例是 `eco_AN2_u0`，见[实例名中的功能码](#实例名中的功能码)。
 
 ### 6. 自定义名称前缀
 
@@ -469,13 +472,40 @@ connect_net     y                                      [get_pin eco_NAND2_u0/y]
 
 ### Tcl 命名规则
 
-- cell instance 名称默认为 `eco_<CELL>_u<uid>`，例如 `eco_NAND2_u0`。
+- cell instance 名称默认为 `eco_<功能码>_u<uid>`，例如 `eco_NAND2_u0`、`eco_AO21_u0`；功能码见[实例名中的功能码](#实例名中的功能码)。
 - 内部 net 名称默认为 `eco_n<node>_u<uid>`，例如 `eco_n3_u1`。
 - 非 primary output 的 mapped cell 输出会生成 `create_net`。
 - primary output 对应的 net 不会额外生成 `create_net`。
 - pin 名称来自 TOML library 的 `inputs` 和 `output` 字段。
 - 中间信号只有以 `eco_` 开头时才会作为 Tcl/report alias 保留。
 - 常量输入会以 `0` 或 `1` 作为 net 名称。
+
+#### 实例名中的功能码
+
+标准单元的名字在功能码之后还带有驱动强度和工艺信息，例如 `AO21D0BWP7T40P140` = `AO21` + `D0` + `BWP7T40P140`。实例名只保留功能码，`get_lib_cells` 引用的仍是完整的 cell 名：
+
+```text
+create_cell     eco_AO21_u0                            [get_lib_cells */AO21D0BWP7T40P140]
+
+connect_net     a                                      [get_pin eco_AO21_u0/A1]
+connect_net     b                                      [get_pin eco_AO21_u0/A2]
+connect_net     c                                      [get_pin eco_AO21_u0/B]
+connect_net     y                                      [get_pin eco_AO21_u0/Z]
+```
+
+功能码是 cell 名中第一个 `D<数字>BWP` 之前的部分；名字里没有 `D<数字>BWP` 时，功能码就是完整的 cell 名：
+
+| cell 名 | 实例名 | |
+|---|---|---|
+| `AO21D0BWP7T40P140` | `eco_AO21_u0` | |
+| `ND2D0BWP7T40P140` | `eco_ND2_u0` | `D2` 后面不是 `BWP`，属于功能码 |
+| `MUX2ND0BWP7T40P140` | `eco_MUX2N_u0` | |
+| `AO21D16BWP7T40P140LVT` | `eco_AO21_u0` | 多位驱动强度、VT 后缀 |
+| `NAND2` | `eco_NAND2_u0` | 没有 `D<数字>BWP`，保持完整名字 |
+
+- 报告的 Mapped netlist 段和 Cell usage 段仍然显示完整的 cell 名。
+- 功能码相同的实例不会重名：uid 在一次运行内唯一。库里同时有 `AN2D0…` 和 `AN2D4…` 时，实例是 `eco_AN2_u0`、`eco_AN2_u1`，各自的 `get_lib_cells` 指向各自的 cell。
+- `--prefix test` 时实例名为 `eco_test_AO21_u0`。
 
 #### 自定义前缀
 
