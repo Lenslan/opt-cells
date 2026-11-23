@@ -49,7 +49,7 @@ output = "Z"
 function = "(A1 & A2 & A3) | B"
 
 [[cell]]
-name = "AOI221D0BWP7T40P140"
+name = "AOI211D0BWP7T40P140"
 inputs = ["A1", "A2", "B", "C"]
 output = "ZN"
 function = "!((A1 & A2) | B | C)"
@@ -219,7 +219,7 @@ function = "!((A1 | A2) & (B1 | B2) & C)"
 [[cell]]
 name = "OAI22D0BWP7T40P140"
 inputs = ["A1", "A2", "B1", "B2"]
-output = "Z"
+output = "ZN"
 function = "!((A1 | A2) & (B1 | B2))"
 
 # XOR2/3/4
