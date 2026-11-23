@@ -75,3 +75,11 @@ fn mux_basic() {
     let s = run("inputs/mux.dsl", "libs/basic.toml");
     assert_golden(&s, "expected/mux_basic.txt");
 }
+
+/// Standard-cell style names: instances carry the function code (`eco_AN3_u0`), every
+/// other mention of the cell is its full name.
+#[test]
+fn state_1_state_test() {
+    let s = run("inputs/STATE_1.dsl", "libs/state_test.toml");
+    assert_golden(&s, "expected/state_1_state_test.txt");
+}

@@ -115,3 +115,25 @@ pub fn enumerate_input_assignments(pi_names: &[String]) -> Vec<HashMap<String, b
     }
     out
 }
+
+/// Lines as whitespace-separated words, so comparisons do not depend on column padding.
+#[allow(dead_code)]
+pub fn words(text: &str) -> Vec<Vec<&str>> {
+    text.lines()
+        .map(|line| line.split_whitespace().collect())
+        .collect()
+}
+
+/// The commands of the report's Tcl section.
+#[allow(dead_code)]
+pub fn tcl_commands(report: &str) -> Vec<Vec<&str>> {
+    words(report)
+        .into_iter()
+        .filter(|line| {
+            matches!(
+                line.first(),
+                Some(&("create_cell" | "create_net" | "connect_net"))
+            )
+        })
+        .collect()
+}

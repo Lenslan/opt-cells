@@ -1,8 +1,11 @@
 //! `--prefix <TAG>`: every cell and net the ECO script creates moves from the `eco_`
 //! namespace into `eco_<TAG>_`. Ports and constants keep their names.
 
+mod common;
+
 use std::process::{Command, Output};
 
+use common::{tcl_commands, words};
 use opt_cells::error::OptCellsError;
 use opt_cells::{run_pipeline, RunInputs};
 
@@ -21,26 +24,6 @@ fn run(
         prefix: prefix.map(str::to_string),
     })
     .map(|(report, _)| report)
-}
-
-/// Lines as whitespace-separated words, so comparisons do not depend on column padding.
-fn words(text: &str) -> Vec<Vec<&str>> {
-    text.lines()
-        .map(|line| line.split_whitespace().collect())
-        .collect()
-}
-
-/// The commands of the report's Tcl section.
-fn tcl_commands(report: &str) -> Vec<Vec<&str>> {
-    words(report)
-        .into_iter()
-        .filter(|line| {
-            matches!(
-                line.first(),
-                Some(&("create_cell" | "create_net" | "connect_net"))
-            )
-        })
-        .collect()
 }
 
 #[test]
@@ -162,14 +145,14 @@ fn vector_ports_that_start_with_eco_keep_their_names() {
     .unwrap();
 
     let expected = "\
-create_cell  eco_test_INR2D0BWP7T40P140_u0  [get_lib_cells */INR2D0BWP7T40P140]
-create_cell  eco_test_INR2D0BWP7T40P140_u1  [get_lib_cells */INR2D0BWP7T40P140]
-connect_net  d[0]      [get_pin eco_test_INR2D0BWP7T40P140_u0/A1]
-connect_net  eco_clr   [get_pin eco_test_INR2D0BWP7T40P140_u0/B1]
-connect_net  eco_q[0]  [get_pin eco_test_INR2D0BWP7T40P140_u0/ZN]
-connect_net  d[1]      [get_pin eco_test_INR2D0BWP7T40P140_u1/A1]
-connect_net  eco_clr   [get_pin eco_test_INR2D0BWP7T40P140_u1/B1]
-connect_net  eco_q[1]  [get_pin eco_test_INR2D0BWP7T40P140_u1/ZN]
+create_cell  eco_test_INR2_u0  [get_lib_cells */INR2D0BWP7T40P140]
+create_cell  eco_test_INR2_u1  [get_lib_cells */INR2D0BWP7T40P140]
+connect_net  d[0]              [get_pin eco_test_INR2_u0/A1]
+connect_net  eco_clr           [get_pin eco_test_INR2_u0/B1]
+connect_net  eco_q[0]          [get_pin eco_test_INR2_u0/ZN]
+connect_net  d[1]              [get_pin eco_test_INR2_u1/A1]
+connect_net  eco_clr           [get_pin eco_test_INR2_u1/B1]
+connect_net  eco_q[1]          [get_pin eco_test_INR2_u1/ZN]
 ";
     assert_eq!(tcl_commands(&report), words(expected), "{report}");
     assert!(

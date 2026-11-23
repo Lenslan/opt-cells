@@ -115,14 +115,14 @@ fn state_1_report_contains_tcl_script() {
     let s = run("inputs/STATE_1.dsl", "libs/state_test.toml");
     assert!(s.contains("  Tcl script"), "{}", s);
     assert!(s.contains("create_cell"), "{}", s);
-    assert!(s.contains("eco_AN3D0BWP7T40P140_u0"), "{}", s);
+    assert!(s.contains("eco_AN3_u0"), "{}", s);
     assert!(s.contains("[get_lib_cells */AN3D0BWP7T40P140]"), "{}", s);
-    assert!(s.contains("eco_INR4D0BWP7T40P140_u1"), "{}", s);
+    assert!(s.contains("eco_INR4_u1"), "{}", s);
     assert!(s.contains("[get_lib_cells */INR4D0BWP7T40P140]"), "{}", s);
     assert!(s.contains("create_net      eco_n9_u1"), "{}", s);
-    assert!(s.contains("[get_pin eco_AN3D0BWP7T40P140_u0/Z]"), "{}", s);
+    assert!(s.contains("[get_pin eco_AN3_u0/Z]"), "{}", s);
     assert!(
-        !s.contains("[get_pin eco_AN3D0BWP7T40P140/A1]"),
+        !s.contains("[get_pin eco_AN3/A1]"),
         "pin connections must use the created instance name:\n{}",
         s
     );

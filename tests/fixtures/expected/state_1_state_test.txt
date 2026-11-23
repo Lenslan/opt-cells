@@ -1,0 +1,35 @@
+===============================================================
+  opt-cells mapping report
+===============================================================
+  Input file       : tests/fixtures/inputs/STATE_1.dsl
+  Cell library     : tests/fixtures/libs/state_test.toml
+  Total cells used : 2
+---------------------------------------------------------------
+  Mapped netlist
+---------------------------------------------------------------
+  u0 : AN3D0BWP7T40P140  (A1=e, A2=f, A3=n9_u1)  -> one_state
+  u1 : INR4D0BWP7T40P140  (A1=a, B1=b, B2=c, B3=d)  -> n9
+
+---------------------------------------------------------------
+  Tcl script
+---------------------------------------------------------------
+create_cell     eco_AN3_u0                             [get_lib_cells */AN3D0BWP7T40P140]
+create_cell     eco_INR4_u1                            [get_lib_cells */INR4D0BWP7T40P140]
+create_net      eco_n9_u1
+
+connect_net     e                                      [get_pin eco_AN3_u0/A1]
+connect_net     f                                      [get_pin eco_AN3_u0/A2]
+connect_net     eco_n9_u1                              [get_pin eco_AN3_u0/A3]
+connect_net     one_state                              [get_pin eco_AN3_u0/Z]
+connect_net     a                                      [get_pin eco_INR4_u1/A1]
+connect_net     b                                      [get_pin eco_INR4_u1/B1]
+connect_net     c                                      [get_pin eco_INR4_u1/B2]
+connect_net     d                                      [get_pin eco_INR4_u1/B3]
+connect_net     eco_n9_u1                              [get_pin eco_INR4_u1/ZN]
+
+---------------------------------------------------------------
+  Cell usage
+---------------------------------------------------------------
+  AN3D0BWP7T40P140 x 1
+  INR4D0BWP7T40P140 x 1
+===============================================================

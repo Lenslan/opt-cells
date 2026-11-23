@@ -106,8 +106,13 @@ fn cell_decl(case: &MappedCase, id: opt_cells::frontend::library::CellId) -> &Ce
         .expect("mapped cell exists in library")
 }
 
+/// Every cell of the workspace library is named `<function code>D0BWP7T40P140`, and an
+/// instance carries only the function code.
 fn instance_name(cell_name: &str, uid: u32) -> String {
-    format!("eco_{}_u{}", cell_name, uid)
+    let function_code = cell_name
+        .strip_suffix("D0BWP7T40P140")
+        .expect("workspace library cell names end in D0BWP7T40P140");
+    format!("eco_{}_u{}", function_code, uid)
 }
 
 fn internal_net_name(node: NodeId, uid: u32) -> String {
@@ -369,10 +374,11 @@ fn simple_and_maps_to_one_basic_library_cell() {
         used_cell_names(&case),
         HashSet::from(["AN2D0BWP7T40P140".to_string()])
     );
-    assert!(case.tcl.contains("eco_AN2D0BWP7T40P140_u0"));
-    assert!(case.tcl.contains("[get_pin eco_AN2D0BWP7T40P140_u0/A1]"));
-    assert!(case.tcl.contains("[get_pin eco_AN2D0BWP7T40P140_u0/A2]"));
-    assert!(case.tcl.contains("[get_pin eco_AN2D0BWP7T40P140_u0/Z]"));
+    assert!(case.tcl.contains("create_cell     eco_AN2_u0 "));
+    assert!(case.tcl.contains("[get_lib_cells */AN2D0BWP7T40P140]"));
+    assert!(case.tcl.contains("[get_pin eco_AN2_u0/A1]"));
+    assert!(case.tcl.contains("[get_pin eco_AN2_u0/A2]"));
+    assert!(case.tcl.contains("[get_pin eco_AN2_u0/Z]"));
     assert_case_is_consistent(&case);
 }
 
@@ -385,7 +391,8 @@ fn inverted_primary_input_uses_real_inverter_cell() {
         used_cell_names(&case),
         HashSet::from(["INVD0BWP7T40P140".to_string()])
     );
-    assert!(case.tcl.contains("eco_INVD0BWP7T40P140_u0"));
+    assert!(case.tcl.contains("create_cell     eco_INV_u0 "));
+    assert!(case.tcl.contains("[get_lib_cells */INVD0BWP7T40P140]"));
     assert!(
         !case.tcl.contains("!a"),
         "no free pin inversion\n{}",

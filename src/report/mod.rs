@@ -288,7 +288,27 @@ impl<'ctx, 'data> TclContext<'ctx, 'data> {
 }
 
 fn instance_name(prefix: &str, cell_name: &str, uid: u32) -> String {
-    format!("{}{}_u{}", prefix, cell_name, uid)
+    format!("{}{}_u{}", prefix, function_code(cell_name), uid)
+}
+
+/// The part of a library cell name that says what the cell computes. Standard-cell names
+/// continue with a drive strength and process tag (`AO21D0BWP7T40P140` = `AO21` + `D0` +
+/// `BWP7T40P140`) that an instance name does not need.
+///
+/// The code ends where the first `D<digits>BWP` starts. A name without one, or with
+/// nothing in front of it, is its own function code.
+fn function_code(cell_name: &str) -> &str {
+    let is_drive_strength = |after_d: &str| {
+        let after_digits = after_d.trim_start_matches(|c: char| c.is_ascii_digit());
+        after_digits.len() < after_d.len() && after_digits.starts_with("BWP")
+    };
+    match cell_name
+        .match_indices('D')
+        .find(|&(at, _)| is_drive_strength(&cell_name[at + 1..]))
+    {
+        Some((at, _)) if at > 0 => &cell_name[..at],
+        _ => cell_name,
+    }
 }
 
 fn internal_net_name(prefix: &str, node: NodeId, uid: u32) -> String {
@@ -364,7 +384,7 @@ mod tests {
     use super::*;
     use crate::aig::Aig;
     use crate::aig::Tt64;
-    use crate::frontend::library::{CellDecl, CellId};
+    use crate::frontend::library::{load_library, CellDecl, CellId};
     use crate::mapper::netlist::{CellInstance, PinInput};
 
     #[test]
@@ -385,6 +405,61 @@ mod tests {
                 Err(OptCellsError::InvalidPrefix(got)) => assert_eq!(got, bad),
                 other => panic!("{bad:?} must be rejected, got {other:?}"),
             }
+        }
+    }
+
+    #[test]
+    fn function_code_drops_the_drive_strength_and_everything_after_it() {
+        for (cell, code) in [
+            ("AO21D0BWP7T40P140", "AO21"),
+            ("INVD0BWP7T40P140", "INV"),
+            ("MUX2ND0BWP7T40P140", "MUX2N"),
+            // A `D<digits>` that `BWP` does not follow is part of the function code.
+            ("ND2D0BWP7T40P140", "ND2"),
+            ("IND4D0BWP7T40P140", "IND4"),
+            ("DEL025D1BWP7T40P140", "DEL025"),
+            ("AO21D16BWP7T40P140LVT", "AO21"),
+            // The first marker is the cut.
+            ("AO21D0BWP7T40D1BWP", "AO21"),
+            // The cut lands on a character boundary in a name that is not ASCII.
+            ("caf\u{e9}D0BWP7T40P140", "caf\u{e9}"),
+        ] {
+            assert_eq!(function_code(cell), code, "{cell}");
+        }
+    }
+
+    #[test]
+    fn function_code_is_the_whole_name_when_there_is_no_drive_strength_to_drop() {
+        for cell in [
+            "NAND2",
+            "AND2B1",
+            "",
+            // Incomplete markers.
+            "AO21D0",
+            "AO21D0BW",
+            "AO21DBWP7T40P140",
+            // The marker is upper case.
+            "ao21d0bwp7t40p140",
+            // Nothing in front of the marker to keep.
+            "D0BWP7T40P140",
+        ] {
+            assert_eq!(function_code(cell), cell, "{cell:?}");
+        }
+    }
+
+    /// The library the rule was written for names its cells `<function code>D0BWP7T40P140`.
+    #[test]
+    fn workspace_library_cells_lose_exactly_their_drive_and_process_suffix() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/workspace/lib/basic.toml");
+        let lib = load_library(path).unwrap();
+        let expected: Vec<(&str, &str)> = lib
+            .cells
+            .iter()
+            .filter_map(|cell| Some((cell.name.as_str(), cell.name.strip_suffix("D0BWP7T40P140")?)))
+            .collect();
+        assert!(!expected.is_empty(), "no cell name ends in D0BWP7T40P140");
+        for (cell, code) in expected {
+            assert_eq!(function_code(cell), code, "{cell}");
         }
     }
 
@@ -518,5 +593,83 @@ mod tests {
         assert!(s.contains("  u1 : AND2  (a=a, b=b)  -> mid\n"), "{s}");
         assert!(s.contains("create_net      mid\n"), "{s}");
         assert!(s.contains("[get_pin eco_test_INV_u0/a]"), "{s}");
+    }
+
+    /// Cells that differ only in drive strength share a function code. The uid keeps their
+    /// instances apart, and each instance is still built from its own library cell.
+    #[test]
+    fn drive_strengths_of_one_function_get_distinct_instances() {
+        // y = (a & b) & c as two AN2 cells of different drive strength.
+        let mut aig = Aig::new();
+        let a = aig.add_input("a");
+        let b = aig.add_input("b");
+        let c = aig.add_input("c");
+        let ab = aig.and(a, b);
+        let abc = aig.and(ab, c);
+        aig.add_output("y", abc);
+        let an2 = |id, name: &str| CellDecl {
+            id: CellId(id),
+            name: name.into(),
+            inputs: vec!["A1".into(), "A2".into()],
+            output_pin: "Z".into(),
+            tt: Tt64(0x8),
+            n_inputs: 2,
+        };
+        let lib = CellLib {
+            cells: vec![an2(0, "AN2D0BWP7T40P140"), an2(1, "AN2D4BWP7T40P140")],
+            notes: vec![],
+        };
+        let pin = |leaf| PinInput {
+            leaf,
+            leaf_negated: false,
+        };
+        let netlist = MappedNetlist {
+            cells: vec![
+                CellInstance {
+                    uid: 0,
+                    cell_id: CellId(1),
+                    aig_node: abc.node,
+                    pin_inputs: vec![pin(ab.node), pin(c.node)],
+                    output_negated: false,
+                },
+                CellInstance {
+                    uid: 1,
+                    cell_id: CellId(0),
+                    aig_node: ab.node,
+                    pin_inputs: vec![pin(a.node), pin(b.node)],
+                    output_negated: false,
+                },
+            ],
+            outputs: vec![("y".into(), abc.node, false)],
+            total_cells: 2,
+        };
+        let display: HashMap<String, String> = HashMap::new();
+        let aliases: HashMap<(NodeId, bool), String> = HashMap::new();
+
+        let tcl = render_tcl(&ReportInput {
+            aig: &aig,
+            lib: &lib,
+            netlist: &netlist,
+            input_path: "inline.dsl",
+            library_path: "lib.toml",
+            display_names: &display,
+            net_aliases: &aliases,
+            name_prefix: "eco_",
+        });
+
+        let commands: Vec<String> = tcl
+            .lines()
+            .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+            .collect();
+        assert_eq!(
+            commands[..2],
+            [
+                "create_cell eco_AN2_u0 [get_lib_cells */AN2D4BWP7T40P140]",
+                "create_cell eco_AN2_u1 [get_lib_cells */AN2D0BWP7T40P140]",
+            ],
+            "{tcl}"
+        );
+        assert!(tcl.contains("[get_pin eco_AN2_u0/Z]"), "{tcl}");
+        assert!(tcl.contains("[get_pin eco_AN2_u1/Z]"), "{tcl}");
     }
 }

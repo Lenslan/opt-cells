@@ -1,7 +1,7 @@
 # 实例名只保留功能码 — Design Spec
 
 **Date**: 2026-11-23
-**Status**: Approved
+**Status**: Implemented
 
 ## 1. 目标
 
@@ -94,20 +94,33 @@ uid 在一次运行内唯一，实例名以 `_u<uid>` 结尾，所以缩短不�
 ## 4. 验证
 
 - `src/report/mod.rs` 单元测试：
-  - `function_code` 对上表各类名字的结果，以及残缺片段（`AO21D0`、`AO21DBWP7T`、
-    `AO21D0BW`）和小写名字保持原名。
-  - `workspace/lib/basic.toml` 的每个 cell：完整名等于功能码加 `D0BWP7T40P140`，功能码两两
-    不同。
+  - `function_code` 对上表各类名字的结果；含两个片段的名字在第一个片段处截断；残缺片段
+    （`AO21D0`、`AO21DBWP7T40P140`、`AO21D0BW`）、小写名字和空串保持原名。
+  - `workspace/lib/basic.toml` 中以 `D0BWP7T40P140` 结尾的每个 cell（目前是全部 39 个）：功能码
+    等于完整名去掉这个后缀。
   - 手工构造的 netlist：同一功能码、不同驱动强度的两个 cell 得到不同的实例名，`get_lib_cells`
     指向各自的完整名字。
 - `tests/instance_names.rs`（经 `run_pipeline`）：
   - `y = (a & b) | c` 配 workspace 库的完整 Tcl 命令序列。
+  - 同一个 cell 的两个实例由 uid 区分。
   - Mapped netlist 和 Cell usage 段仍显示完整 cell 名。
   - `--prefix` 与功能码叠加。
   - 同一个库里带片段和不带片段的 cell 同时出现时各自的实例名。
-  - 较大的用例中，每条 `create_cell` 的实例名都等于 `eco_<功能码>_u<uid>`，每条 `get_pin`
-    引用的实例都已被创建。
+  - 较大的用例中，Mapped netlist 段的每个 `u<uid> : <CELL>` 都对应一条
+    `create_cell eco_<功能码>_u<uid> [get_lib_cells */<CELL>]`，实例名互不相同，`get_pin`
+    引用的实例与创建的实例一致。
+- `tests/golden.rs` 新增 `state_1_state_test`（`STATE_1.dsl` × `state_test.toml`）：逐字节固定
+  一份带片段 cell 名的完整报告，包括列对齐。原有 golden 文件不含带片段的 cell 名，没有变化。
 - 现有测试中写死的长实例名（`tests/workspace_basic.rs`、`tests/strict_inversion.rs`、
-  `tests/name_prefix.rs`）改为新名字；golden 文件不含带片段的 cell 名，不需要变化。
-- 回归：全部 fixture 输入和 `workspace/` 下的 DSL × 全部库，对比改动前后的可执行文件。改动后的
-  stdout 等于把改动前 stdout 中的实例名换成短名并重新补齐列宽，stderr 和退出码不变。
+  `tests/name_prefix.rs`）改为新名字。
+- 变异检查，共 11 种改法，每一种都有测试失败：
+  - 规则本身：不要求数字、不要求 `BWP`、只认一位数字、不区分大小写、取最后一个片段、片段在
+    开头时返回空串、找到片段后不截断。
+  - 规则的使用位置：Mapped netlist 段、Cell usage 段或 `get_lib_cells` 也改用功能码；
+    `connect_net` 的实例名仍用完整 cell 名。
+- 回归：14 个 DSL（全部 fixture 输入和 `workspace/` 下的 DSL）× 7 个库 × {默认、`--prefix`、
+  `--quiet`}，共 294 次运行（228 次成功、66 次报错），对比改动前后的可执行文件：
+  - 退出码和 stderr 全部相同。
+  - 242 次的 stdout 逐字节相同，其中包括 cell 名都不含片段的 4 个库的全部运行。
+  - 52 次的 stdout 有变化，共 720 行，全部是 `create_cell` 和 `connect_net` 行。这些 stdout 与
+    “把改动前 stdout 中的实例名换成短名并重新补齐列宽”的结果逐字节相同。
